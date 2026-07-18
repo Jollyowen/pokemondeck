@@ -1,0 +1,16 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@/lib/supabase/server",
+            "message": "Do not import the server Supabase client into client components."
+          }
+        ]
+      }
+    ]
+  }
+}

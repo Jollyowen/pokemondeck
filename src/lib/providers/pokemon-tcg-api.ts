@@ -209,7 +209,11 @@ export const pokemonTcgApiProvider: CardProvider = {
       q: query,
       page: String(page),
       pageSize: String(pageSize),
-      orderBy: "name",
+      // "id" is a stable, unique tiebreaker. Sorting by name alone leaves
+      // ties (many cards genuinely share the same name across printings)
+      // in backend-dependent order, which can shuffle between requests and
+      // cause pagination to skip or duplicate results across pages.
+      orderBy: "name,id",
     });
 
     return {

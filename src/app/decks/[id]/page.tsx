@@ -8,6 +8,7 @@ import { Pagination } from "@/components/cards/Pagination";
 import { DeckCardList } from "@/components/decks/DeckCardList";
 import { DeckStatisticsPanel } from "@/components/decks/DeckStatisticsPanel";
 import { ShareDeckPanel } from "@/components/decks/ShareDeckPanel";
+import { DeckReviewPanel } from "@/components/decks/DeckReviewPanel";
 import { computeDeckStatistics } from "@/lib/deck/statistics";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { isApiError } from "@/types/api";
@@ -219,6 +220,34 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
     mutateCards((prev) => prev.filter((e) => e.cardId !== cardId));
   }
 
+  function handleApplySwap(
+    remove: Array<{ cardId: string; count: number }>,
+    add: Array<{ cardId: string; count: number }>,
+  ) {
+    mutateCards((prev) => {
+      const byId = new Map(prev.map((e) => [e.cardId, { ...e }]));
+      for (const r of remove) {
+        const existing = byId.get(r.cardId);
+        if (!existing) continue;
+        existing.quantity -= r.count;
+        if (existing.quantity <= 0) byId.delete(r.cardId);
+      }
+      for (const a of add) {
+        const existing = byId.get(a.cardId);
+        if (existing) {
+          existing.quantity += a.count;
+        } else {
+          byId.set(a.cardId, {
+            cardId: a.cardId,
+            cardName: knownCards[a.cardId]?.name ?? a.cardId,
+            quantity: a.count,
+          });
+        }
+      }
+      return [...byId.values()];
+    });
+  }
+
   function handleUndo() {
     if (!undoSnapshot.current) return;
     const restored = undoSnapshot.current;
@@ -376,6 +405,8 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
           setShareToken(shareToken);
         }}
       />
+
+      <DeckReviewPanel deckId={deckId} knownCards={knownCards} onApplySwap={handleApplySwap} />
     </div>
   );
 }

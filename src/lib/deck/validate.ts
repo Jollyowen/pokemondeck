@@ -2,6 +2,14 @@ import type { Card, DeckFormat } from "@/types/card";
 import type { DeckCardEntry, DeckStatus, DeckValidationIssue, DeckValidationResult } from "@/types/deck";
 import { normalizeCardName } from "@/lib/deck/normalize-name";
 
+/**
+ * Bump whenever the validation logic below changes in a way that could
+ * change a deck's computed status or issues. Included in the AI-review
+ * cache hash so a rules change invalidates previously cached reviews,
+ * rather than serving a review computed against stale logic.
+ */
+export const VALIDATION_RULES_VERSION = "1.0.0";
+
 const DECK_SIZE = 60;
 const DEFAULT_COPY_LIMIT = 4;
 

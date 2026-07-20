@@ -1,5 +1,5 @@
-import Link from "next/link";
 import type { Metadata } from "next";
+import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen flex flex-col">
         <header className="border-b border-neutral-200 px-4 py-3">
-			<Link href="/" className="font-semibold">
+          <Link href="/" className="font-semibold">
             TCG Deck Builder
           </Link>
         </header>

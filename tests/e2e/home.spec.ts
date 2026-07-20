@@ -6,4 +6,5 @@ test("home page loads and shows the app shell", async ({ page }) => {
   await expect(
     page.getByText("This is an unofficial Pokémon TCG deck-building tool."),
   ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Browse cards" })).toBeVisible();
 });

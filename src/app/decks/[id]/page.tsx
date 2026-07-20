@@ -7,6 +7,7 @@ import { AddCardTile } from "@/components/decks/AddCardTile";
 import { Pagination } from "@/components/cards/Pagination";
 import { DeckCardList } from "@/components/decks/DeckCardList";
 import { DeckStatisticsPanel } from "@/components/decks/DeckStatisticsPanel";
+import { ShareDeckPanel } from "@/components/decks/ShareDeckPanel";
 import { computeDeckStatistics } from "@/lib/deck/statistics";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { isApiError } from "@/types/api";
@@ -46,6 +47,8 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
   const [knownCards, setKnownCards] = useState<Record<string, Card>>({});
   const [validation, setValidation] = useState<DeckValidationResult | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [shareEnabled, setShareEnabled] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
 
   const [sets, setSets] = useState<CardSet[]>([]);
   const [searchFilters, setSearchFilters] = useState<CardFilterState>(DEFAULT_FILTERS);
@@ -89,6 +92,8 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
         setCards(deck.cards);
         setKnownCards(resolvedCards);
         setValidation(validation);
+        setShareEnabled(deck.shareEnabled);
+        setShareToken(deck.shareToken);
         setLoadState("ready");
         // Defer autosave-triggering until after this initial state settles.
         setTimeout(() => {
@@ -361,6 +366,16 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
         <h2 className="font-medium mb-3">Statistics</h2>
         <DeckStatisticsPanel stats={statistics} />
       </section>
+
+      <ShareDeckPanel
+        deckId={deckId}
+        shareEnabled={shareEnabled}
+        shareToken={shareToken}
+        onShareStateChange={({ shareEnabled, shareToken }) => {
+          setShareEnabled(shareEnabled);
+          setShareToken(shareToken);
+        }}
+      />
     </div>
   );
 }

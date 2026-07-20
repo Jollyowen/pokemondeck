@@ -1,4 +1,5 @@
 import "server-only";
+import { randomBytes } from "crypto";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Deck, DeckCardEntry, DeckStatus } from "@/types/deck";
 import type { DeckFormat } from "@/types/card";
@@ -257,6 +258,124 @@ export async function duplicateOwnedDeck(
   const updated = await updateOwnedDeck(created.id, ownerId, {
     cards: original.cards,
     status: original.status,
+  });
+  return updated ?? created;
+}
+
+/** 128 bits of entropy, hex-encoded — never derived from or equal to the deck's own database id. */
+function generateShareToken(): string {
+  return randomBytes(16).toString("hex");
+}
+
+/**
+ * Enables sharing, always issuing a brand new token. This means a previous
+ * share link can never accidentally start working again just because
+ * sharing was re-enabled later — see revokeSharing, which clears the
+ * token entirely on disable.
+ */
+export async function enableSharing(deckId: string, ownerId: string): Promise<{ shareToken: string } | null> {
+  const supabase = getSupabaseServerClient();
+  const shareToken = generateShareToken();
+
+  const { data } = await supabase
+    .from("decks")
+    .update({ share_enabled: true, share_token: shareToken, updated_at: new Date().toISOString() })
+    .eq("id", deckId)
+    .eq("owner_id", ownerId)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  return data ? { shareToken } : null;
+}
+
+/** Revokes sharing and clears the token, so the old link can never work again even if re-shared later. */
+export async function revokeSharing(deckId: string, ownerId: string): Promise<boolean> {
+  const supabase = getSupabaseServerClient();
+  const { data } = await supabase
+    .from("decks")
+    .update({ share_enabled: false, share_token: null, updated_at: new Date().toISOString() })
+    .eq("id", deckId)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  return Boolean(data);
+}
+
+export type PublicSharedDeck = {
+  id: string;
+  name: string;
+  format: DeckFormat;
+  status: DeckStatus;
+  cards: DeckCardEntry[];
+  updatedAt: string;
+};
+
+/**
+ * Looks up a deck by its public share token. Deliberately returns a
+ * narrower shape than the internal Deck type — no ownerId, no shareToken
+ * itself, no deletedAt — so there's no risk of an owner-identifying field
+ * leaking into a public JSON response by accident.
+ */
+export async function getSharedDeckByToken(shareToken: string): Promise<PublicSharedDeck | null> {
+  const supabase = getSupabaseServerClient();
+
+  const { data: deckRow } = await supabase
+    .from("decks")
+    .select("id, name, format, status, updated_at")
+    .eq("share_token", shareToken)
+    .eq("share_enabled", true)
+    .is("deleted_at", null)
+    .maybeSingle<{
+      id: string;
+      name: string;
+      format: DeckFormat;
+      status: DeckStatus;
+      updated_at: string;
+    }>();
+
+  if (!deckRow) return null;
+
+  const { data: cardRows } = await supabase
+    .from("deck_cards")
+    .select("card_id, card_name, quantity")
+    .eq("deck_id", deckRow.id);
+
+  const cards: DeckCardEntry[] = ((cardRows as DeckCardRow[] | null) ?? []).map((row) => ({
+    cardId: row.card_id,
+    cardName: row.card_name,
+    quantity: row.quantity,
+  }));
+
+  return {
+    id: deckRow.id,
+    name: deckRow.name,
+    format: deckRow.format,
+    status: deckRow.status,
+    cards,
+    updatedAt: deckRow.updated_at,
+  };
+}
+
+/**
+ * Copies a publicly shared deck into a new owner's library. Looked up by
+ * share token (not deck id) so this only ever works for decks that are
+ * actually currently shared — an unshared or revoked deck can't be copied
+ * this way even if someone somehow knew its database id.
+ */
+export async function copySharedDeckToOwner(
+  shareToken: string,
+  newOwnerId: string,
+): Promise<Deck | null> {
+  const shared = await getSharedDeckByToken(shareToken);
+  if (!shared) return null;
+
+  const created = await createDeck(newOwnerId, shared.name, shared.format);
+  if (shared.cards.length === 0) return created;
+
+  const updated = await updateOwnedDeck(created.id, newOwnerId, {
+    cards: shared.cards,
+    status: shared.status,
   });
   return updated ?? created;
 }

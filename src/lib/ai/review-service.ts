@@ -25,7 +25,7 @@ export type ReviewOutcome = {
 };
 
 export async function getOrGenerateReview(deck: Deck, ownerId: string): Promise<ReviewOutcome> {
-  const deckHash = computeDeckReviewHash(deck.cards, deck.format);
+  const deckHash = computeDeckReviewHash(deck.cards, deck.format, deck.strategyArchetype, deck.strategyNotes);
 
   const cached = await findCachedReview(deck.id, deckHash);
   if (cached) {
@@ -61,6 +61,8 @@ export async function getOrGenerateReview(deck: Deck, ownerId: string): Promise<
       format: deck.format,
       cards: deckReviewCards,
       candidateCards: candidateReviewCards,
+      strategyArchetype: deck.strategyArchetype,
+      strategyNotes: deck.strategyNotes,
     });
   } catch (error) {
     // Log without owner cookies, secrets, or deck names — just enough to debug.
@@ -98,6 +100,6 @@ export async function getLatestReviewWithStaleness(deck: Deck): Promise<LatestRe
   const latest = await findLatestReview(deck.id);
   if (!latest) return null;
 
-  const currentHash = computeDeckReviewHash(deck.cards, deck.format);
+  const currentHash = computeDeckReviewHash(deck.cards, deck.format, deck.strategyArchetype, deck.strategyNotes);
   return { review: latest, isStale: latest.deckHash !== currentHash };
 }

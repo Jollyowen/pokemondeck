@@ -49,6 +49,23 @@ export default async function SharedDeckPage({
       <div>
         <p className="text-xs text-neutral-400 mb-1">Shared deck (read-only)</p>
         <h1 className="text-2xl font-semibold">{deck.name}</h1>
+        {(deck.strategyArchetype || deck.strategyNotes) && (
+          <p className="text-sm text-neutral-500 mt-1">
+            {deck.strategyArchetype && (
+              <span className="capitalize">
+                {deck.strategyArchetype === "aggro"
+                  ? "Aggro / Beatdown"
+                  : deck.strategyArchetype === "control"
+                    ? "Control / Stall"
+                    : deck.strategyArchetype === "mill"
+                      ? "Mill"
+                      : "Other"}
+              </span>
+            )}
+            {deck.strategyArchetype && deck.strategyNotes && " — "}
+            {deck.strategyNotes}
+          </p>
+        )}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className={`text-xs rounded-full px-2.5 py-1 ${STATUS_COLOR[deck.status]}`}>
             {STATUS_LABEL[deck.status]}

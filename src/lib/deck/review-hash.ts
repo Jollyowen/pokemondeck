@@ -11,7 +11,12 @@ import { REVIEW_PROMPT_VERSION } from "@/lib/ai/prompt";
  * cached review, since the review those hashes point to was computed
  * against different logic.
  */
-export function computeDeckReviewHash(entries: DeckCardEntry[], format: DeckFormat): string {
+export function computeDeckReviewHash(
+  entries: DeckCardEntry[],
+  format: DeckFormat,
+  strategyArchetype: string | null,
+  strategyNotes: string | null,
+): string {
   const sorted = [...entries]
     .map((e) => `${e.cardId}:${e.quantity}`)
     .sort();
@@ -19,6 +24,8 @@ export function computeDeckReviewHash(entries: DeckCardEntry[], format: DeckForm
   const input = [
     sorted.join(","),
     format,
+    `archetype:${strategyArchetype ?? ""}`,
+    `notes:${strategyNotes ?? ""}`,
     `rules:${VALIDATION_RULES_VERSION}`,
     `prompt:${REVIEW_PROMPT_VERSION}`,
   ].join("|");

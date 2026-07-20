@@ -1,7 +1,7 @@
 import "server-only";
 import { randomBytes } from "crypto";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { Deck, DeckCardEntry, DeckStatus } from "@/types/deck";
+import type { Deck, DeckCardEntry, DeckStatus, StrategyArchetype } from "@/types/deck";
 import type { DeckFormat } from "@/types/card";
 
 type DeckRow = {
@@ -12,6 +12,8 @@ type DeckRow = {
   status: DeckStatus;
   share_enabled: boolean;
   share_token: string | null;
+  strategy_archetype: StrategyArchetype | null;
+  strategy_notes: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -33,6 +35,8 @@ function toDeck(row: DeckRow, cards: DeckCardEntry[]): Deck {
     shareEnabled: row.share_enabled,
     shareToken: row.share_token,
     cards,
+    strategyArchetype: row.strategy_archetype,
+    strategyNotes: row.strategy_notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
@@ -99,6 +103,8 @@ export type DeckUpdatePatch = {
   format?: DeckFormat;
   cards?: DeckCardEntry[];
   status?: DeckStatus;
+  strategyArchetype?: StrategyArchetype | null;
+  strategyNotes?: string | null;
 };
 
 /** Returns null if the deck doesn't exist or isn't owned by ownerId. */
@@ -124,6 +130,8 @@ export async function updateOwnedDeck(
   if (patch.name !== undefined) deckPatch.name = patch.name;
   if (patch.format !== undefined) deckPatch.format = patch.format;
   if (patch.status !== undefined) deckPatch.status = patch.status;
+  if (patch.strategyArchetype !== undefined) deckPatch.strategy_archetype = patch.strategyArchetype;
+  if (patch.strategyNotes !== undefined) deckPatch.strategy_notes = patch.strategyNotes;
 
   await supabase.from("decks").update(deckPatch).eq("id", deckId);
 
@@ -258,6 +266,8 @@ export async function duplicateOwnedDeck(
   const updated = await updateOwnedDeck(created.id, ownerId, {
     cards: original.cards,
     status: original.status,
+    strategyArchetype: original.strategyArchetype,
+    strategyNotes: original.strategyNotes,
   });
   return updated ?? created;
 }
@@ -308,6 +318,8 @@ export type PublicSharedDeck = {
   format: DeckFormat;
   status: DeckStatus;
   cards: DeckCardEntry[];
+  strategyArchetype: StrategyArchetype | null;
+  strategyNotes: string | null;
   updatedAt: string;
 };
 
@@ -322,7 +334,7 @@ export async function getSharedDeckByToken(shareToken: string): Promise<PublicSh
 
   const { data: deckRow } = await supabase
     .from("decks")
-    .select("id, name, format, status, updated_at")
+    .select("id, name, format, status, strategy_archetype, strategy_notes, updated_at")
     .eq("share_token", shareToken)
     .eq("share_enabled", true)
     .is("deleted_at", null)
@@ -331,6 +343,8 @@ export async function getSharedDeckByToken(shareToken: string): Promise<PublicSh
       name: string;
       format: DeckFormat;
       status: DeckStatus;
+      strategy_archetype: StrategyArchetype | null;
+      strategy_notes: string | null;
       updated_at: string;
     }>();
 
@@ -353,6 +367,8 @@ export async function getSharedDeckByToken(shareToken: string): Promise<PublicSh
     format: deckRow.format,
     status: deckRow.status,
     cards,
+    strategyArchetype: deckRow.strategy_archetype,
+    strategyNotes: deckRow.strategy_notes,
     updatedAt: deckRow.updated_at,
   };
 }
@@ -376,6 +392,8 @@ export async function copySharedDeckToOwner(
   const updated = await updateOwnedDeck(created.id, newOwnerId, {
     cards: shared.cards,
     status: shared.status,
+    strategyArchetype: shared.strategyArchetype,
+    strategyNotes: shared.strategyNotes,
   });
   return updated ?? created;
 }

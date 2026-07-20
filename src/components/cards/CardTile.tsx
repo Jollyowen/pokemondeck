@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { Card, DeckFormat } from "@/types/card";
 import { isCardLegalInFormat } from "@/lib/format-legality";
+import { formatCardPrice } from "@/lib/format-price";
 
 const FORMAT_LABEL: Record<DeckFormat, string> = {
   standard: "Standard",
@@ -12,6 +13,7 @@ const FORMAT_LABEL: Record<DeckFormat, string> = {
 
 export function CardTile({ card, format }: { card: Card; format: DeckFormat }) {
   const legal = isCardLegalInFormat(card, format);
+  const price = formatCardPrice(card.price);
 
   return (
     <Link
@@ -37,6 +39,7 @@ export function CardTile({ card, format }: { card: Card; format: DeckFormat }) {
       <p className="text-xs text-neutral-500 truncate">
         {card.setName} · {card.number}
       </p>
+      {price && <p className="text-xs text-neutral-400">{price}</p>}
       {!legal && (
         <p className="mt-1 text-xs text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 inline-block">
           Not legal in {FORMAT_LABEL[format]}

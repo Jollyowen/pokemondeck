@@ -10,10 +10,11 @@ import { DeckStatisticsPanel } from "@/components/decks/DeckStatisticsPanel";
 import { ShareDeckPanel } from "@/components/decks/ShareDeckPanel";
 import { DeckReviewPanel } from "@/components/decks/DeckReviewPanel";
 import { computeDeckStatistics } from "@/lib/deck/statistics";
+import { computeEstimatedDeckValue } from "@/lib/deck/deck-value";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { isApiError } from "@/types/api";
 import type { Card, CardSearchResult, DeckFormat, CardSet } from "@/types/card";
-import type { Deck, DeckCardEntry, DeckValidationResult } from "@/types/deck";
+import type { Deck, DeckCardEntry, DeckValidationResult, StrategyArchetype } from "@/types/deck";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -43,6 +44,8 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
 
   const [loadState, setLoadState] = useState<"loading" | "notFound" | "error" | "ready">("loading");
   const [name, setName] = useState("");
+  const [strategyNotes, setStrategyNotes] = useState("");
+  const [strategyArchetype, setStrategyArchetype] = useState<StrategyArchetype | "">("");
   const [format, setFormat] = useState<DeckFormat>("standard");
   const [cards, setCards] = useState<DeckCardEntry[]>([]);
   const [knownCards, setKnownCards] = useState<Record<string, Card>>({});
@@ -69,6 +72,10 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
     () => computeDeckStatistics(cards, knownCards, format),
     [cards, knownCards, format],
   );
+  const estimatedValue = useMemo(
+    () => computeEstimatedDeckValue(cards, knownCards),
+    [cards, knownCards],
+  );
 
   // Load the deck once on mount.
   useEffect(() => {
@@ -89,6 +96,8 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
           validation: DeckValidationResult;
         };
         setName(deck.name);
+        setStrategyNotes(deck.strategyNotes ?? "");
+        setStrategyArchetype(deck.strategyArchetype ?? "");
         setFormat(deck.format);
         setCards(deck.cards);
         setKnownCards(resolvedCards);
@@ -153,7 +162,13 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
   }, [debouncedSearchName, searchFilters.supertype, searchFilters.pokemonType, searchFilters.setId, searchFilters.rarity, searchPage]);
 
   const scheduleSave = useCallback(
-    (nextName: string, nextFormat: DeckFormat, nextCards: DeckCardEntry[]) => {
+    (
+      nextName: string,
+      nextFormat: DeckFormat,
+      nextCards: DeckCardEntry[],
+      nextStrategyArchetype: StrategyArchetype | "",
+      nextStrategyNotes: string,
+    ) => {
       if (!loadedRef.current) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       setSaveStatus("saving");
@@ -162,7 +177,13 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
           const res = await fetch(`/api/decks/${deckId}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: nextName, format: nextFormat, cards: nextCards }),
+            body: JSON.stringify({
+              name: nextName,
+              format: nextFormat,
+              cards: nextCards,
+              strategyArchetype: nextStrategyArchetype || null,
+              strategyNotes: nextStrategyNotes.trim() || null,
+            }),
           });
           const body = await res.json();
           if (isApiError(body)) {
@@ -193,7 +214,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
     setCards((prev) => {
       pushUndoSnapshot(prev);
       const next = updater(prev);
-      scheduleSave(name, format, next);
+      scheduleSave(name, format, next, strategyArchetype, strategyNotes);
       return next;
     });
   }
@@ -254,17 +275,26 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
     undoSnapshot.current = null;
     setCanUndo(false);
     setCards(restored);
-    scheduleSave(name, format, restored);
+    scheduleSave(name, format, restored, strategyArchetype, strategyNotes);
   }
 
   function handleNameBlur() {
-    scheduleSave(name, format, cards);
+    scheduleSave(name, format, cards, strategyArchetype, strategyNotes);
+  }
+
+  function handleStrategyNotesBlur() {
+    scheduleSave(name, format, cards, strategyArchetype, strategyNotes);
+  }
+
+  function handleStrategyArchetypeChange(next: StrategyArchetype | "") {
+    setStrategyArchetype(next);
+    scheduleSave(name, format, cards, next, strategyNotes);
   }
 
   function handleFormatChange(nextFormat: DeckFormat) {
     setFormat(nextFormat);
     // Changing format never removes cards — only re-evaluates legality.
-    scheduleSave(name, nextFormat, cards);
+    scheduleSave(name, nextFormat, cards, strategyArchetype, strategyNotes);
   }
 
   if (loadState === "loading") {
@@ -297,6 +327,28 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             onBlur={handleNameBlur}
             className="text-2xl font-semibold w-full border-b border-transparent hover:border-neutral-300 focus:border-neutral-500 focus:outline-none"
             maxLength={100}
+          />
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <select
+              value={strategyArchetype}
+              onChange={(e) => handleStrategyArchetypeChange(e.target.value as StrategyArchetype | "")}
+              className="min-h-11 rounded-md border border-neutral-300 px-2 text-sm text-neutral-600"
+              aria-label="Deck strategy archetype"
+            >
+              <option value="">Strategy (optional)</option>
+              <option value="aggro">Aggro / Beatdown</option>
+              <option value="control">Control / Stall</option>
+              <option value="mill">Mill</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <input
+            value={strategyNotes}
+            onChange={(e) => setStrategyNotes(e.target.value)}
+            onBlur={handleStrategyNotesBlur}
+            placeholder={'Extra detail (optional) — e.g. "focused on early Charizard pressure"'}
+            className="mt-1 text-sm w-full text-neutral-600 border-b border-transparent hover:border-neutral-300 focus:border-neutral-500 focus:outline-none placeholder:text-neutral-400"
+            maxLength={300}
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={`text-xs rounded-full px-2.5 py-1 ${STATUS_COLOR[validation?.status ?? "draft"]}`}>
@@ -394,6 +446,18 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
       <section className="rounded-lg border border-neutral-200 p-4">
         <h2 className="font-medium mb-3">Statistics</h2>
         <DeckStatisticsPanel stats={statistics} />
+        {estimatedValue && (
+          <p className="text-sm text-neutral-500 border-t border-neutral-200 mt-4 pt-3">
+            Estimated value: <strong>${estimatedValue.total.toFixed(2)}</strong> (TCGplayer market price)
+            {estimatedValue.missingPriceCount > 0 && (
+              <span className="text-neutral-400">
+                {" "}
+                — {estimatedValue.missingPriceCount} card{estimatedValue.missingPriceCount === 1 ? "" : "s"}{" "}
+                have no price data and aren&apos;t included
+              </span>
+            )}
+          </p>
+        )}
       </section>
 
       <ShareDeckPanel

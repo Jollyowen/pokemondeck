@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeCard, mapLegality, buildSearchQuery } from "@/lib/providers/pokemon-tcg-api";
+import { normalizeCard, mapLegality, buildSearchQuery, extractPrice } from "@/lib/providers/pokemon-tcg-api";
 
 describe("mapLegality", () => {
   it("maps 'Legal' to legal", () => {
@@ -104,5 +104,50 @@ describe("buildSearchQuery", () => {
 
   it("returns an empty string when no filters are given", () => {
     expect(buildSearchQuery({})).toBe("");
+  });
+});
+
+describe("extractPrice", () => {
+  it("returns null when there is no tcgplayer data", () => {
+    expect(extractPrice(undefined)).toBeNull();
+  });
+
+  it("returns null when prices object is present but empty", () => {
+    expect(extractPrice({ url: "https://example.com", prices: {} })).toBeNull();
+  });
+
+  it("prefers the 'normal' variant when available", () => {
+    const price = extractPrice({
+      url: "https://tcgplayer.example/card",
+      updatedAt: "2026/01/01",
+      prices: {
+        holofoil: { low: 5, mid: 8, high: 20, market: 7.5 },
+        normal: { low: 1, mid: 2, high: 5, market: 1.8 },
+      },
+    });
+    expect(price?.variant).toBe("normal");
+    expect(price?.market).toBe(1.8);
+  });
+
+  it("falls back to mid when market is missing", () => {
+    const price = extractPrice({ prices: { normal: { low: 1, mid: 2.5, high: 5 } } });
+    expect(price?.market).toBe(2.5);
+  });
+
+  it("falls back to any available variant when none of the preferred ones are present", () => {
+    const price = extractPrice({ prices: { "1stEditionNormal": { market: 12 } } });
+    expect(price?.variant).toBe("1stEditionNormal");
+    expect(price?.market).toBe(12);
+  });
+
+  it("carries through the url and updatedAt fields", () => {
+    const price = extractPrice({
+      url: "https://tcgplayer.example/card",
+      updatedAt: "2026/01/01",
+      prices: { normal: { market: 3 } },
+    });
+    expect(price?.url).toBe("https://tcgplayer.example/card");
+    expect(price?.updatedAt).toBe("2026/01/01");
+    expect(price?.currency).toBe("USD");
   });
 });

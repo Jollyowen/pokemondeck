@@ -61,6 +61,31 @@ export default async function CardDetailPage({
             <p className="text-neutral-500">
               {card.setName} · {card.number} {card.hp ? `· HP ${card.hp}` : ""}
             </p>
+            {card.price && card.price.market !== null && (
+              <p className="text-sm text-neutral-600 mt-1">
+                ${card.price.market.toFixed(2)}
+                {card.price.low !== null && card.price.high !== null && (
+                  <span className="text-neutral-400">
+                    {" "}
+                    (${card.price.low.toFixed(2)}–${card.price.high.toFixed(2)})
+                  </span>
+                )}
+                <span className="text-neutral-400"> · {card.price.variant}</span>
+                {card.price.url && (
+                  <>
+                    {" · "}
+                    <a
+                      href={card.price.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      View on TCGplayer
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2 text-xs">

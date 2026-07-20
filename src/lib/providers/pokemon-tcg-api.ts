@@ -41,6 +41,11 @@ type RawCard = {
   set?: { id: string; name: string; series: string; releaseDate: string };
   images?: { small?: string; large?: string };
   legalities?: { standard?: string; expanded?: string; unlimited?: string };
+  tcgplayer?: {
+    url?: string;
+    updatedAt?: string;
+    prices?: Record<string, { low?: number; mid?: number; high?: number; market?: number }>;
+  };
 };
 
 type RawSet = {
@@ -77,6 +82,41 @@ export function mapLegality(raw: string | undefined): "legal" | "not_legal" {
   // legal in that format, and present with "Legal" or "Banned" otherwise.
   // Both "absent" and "Banned" map to not_legal here.
   return raw?.toLowerCase() === "legal" ? "legal" : "not_legal";
+}
+
+const PREFERRED_PRICE_VARIANT_ORDER = [
+  "normal",
+  "holofoil",
+  "reverseHolofoil",
+  "1stEditionNormal",
+  "1stEditionHolofoil",
+  "unlimited",
+  "unlimitedHolofoil",
+];
+
+export function extractPrice(tcgplayer: RawCard["tcgplayer"]): Card["price"] {
+  const prices = tcgplayer?.prices;
+  if (!prices) return null;
+
+  const availableKeys = Object.keys(prices);
+  if (availableKeys.length === 0) return null;
+
+  const variant =
+    PREFERRED_PRICE_VARIANT_ORDER.find((key) => key in prices) ?? availableKeys[0]!;
+  const variantPrices = prices[variant];
+  if (!variantPrices) return null;
+
+  const market = variantPrices.market ?? variantPrices.mid ?? null;
+
+  return {
+    variant,
+    market: market ?? null,
+    low: variantPrices.low ?? null,
+    high: variantPrices.high ?? null,
+    currency: "USD",
+    url: tcgplayer?.url ?? null,
+    updatedAt: tcgplayer?.updatedAt ?? null,
+  };
 }
 
 export function normalizeCard(raw: RawCard): Card {
@@ -122,6 +162,7 @@ export function normalizeCard(raw: RawCard): Card {
       expanded: mapLegality(raw.legalities?.expanded),
       unlimited: mapLegality(raw.legalities?.unlimited),
     },
+    price: extractPrice(raw.tcgplayer),
   };
 }
 

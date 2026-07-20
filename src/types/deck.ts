@@ -8,6 +8,8 @@ export type DeckCardEntry = {
   quantity: number;
 };
 
+export type StrategyArchetype = "aggro" | "control" | "mill" | "other";
+
 export type Deck = {
   id: string;
   ownerId: string;
@@ -17,6 +19,8 @@ export type Deck = {
   shareEnabled: boolean;
   shareToken: string | null;
   cards: DeckCardEntry[];
+  strategyArchetype: StrategyArchetype | null;
+  strategyNotes: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -71,6 +75,9 @@ export type DeckReviewInput = {
   format: DeckFormat;
   cards: DeckReviewCard[];
   candidateCards: DeckReviewCard[];
+  /** The deck owner's own stated goal, e.g. "fast aggro" or "control with disruption". */
+  strategyArchetype: StrategyArchetype | null;
+  strategyNotes: string | null;
 };
 
 export type DeckReviewIssueCategory =

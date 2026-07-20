@@ -48,6 +48,8 @@ export const PATCH = withApiErrorHandling(
       name: parsed.data.name,
       format: parsed.data.format,
       cards: parsed.data.cards,
+      strategyArchetype: parsed.data.strategyArchetype,
+      strategyNotes: parsed.data.strategyNotes,
     });
     if (!updated) return notFound();
 

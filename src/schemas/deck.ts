@@ -13,10 +13,14 @@ export const createDeckSchema = z.object({
   format: deckFormatSchema,
 });
 
+export const strategyArchetypeSchema = z.enum(["aggro", "control", "mill", "other"]);
+
 export const updateDeckSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   format: deckFormatSchema.optional(),
   cards: z.array(deckCardEntrySchema).max(60).optional(),
+  strategyArchetype: strategyArchetypeSchema.nullable().optional(),
+  strategyNotes: z.string().trim().max(300).nullable().optional(),
 });
 
 export const duplicateDeckSchema = z.object({

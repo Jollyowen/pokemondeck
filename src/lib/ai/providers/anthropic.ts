@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { getServerEnv } from "@/lib/env";
-import { REVIEW_SYSTEM_INSTRUCTIONS, buildReviewDataBlock } from "@/lib/ai/prompt";
+import { REVIEW_TASK_INSTRUCTIONS, buildReviewDataBlock } from "@/lib/ai/prompt";
 import { parseAndValidateReviewOutput } from "@/lib/ai/review-schema";
 import { AiReviewOutputError } from "@/lib/ai/errors";
 import type { DeckReviewInput, DeckReviewProvider, DeckReviewResult } from "@/types/deck";
@@ -17,6 +17,7 @@ const REVIEW_TOOL = {
       summary: { type: "string" },
       strengths: {
         type: "array",
+        description: "An array of strength objects. Must be a JSON array, never a string.",
         items: {
           type: "object",
           properties: {
@@ -93,7 +94,7 @@ export const anthropicReviewProvider: DeckReviewProvider = {
     const response = await client.messages.create({
       model: env.AI_MODEL,
       max_tokens: 8192,
-      system: REVIEW_SYSTEM_INSTRUCTIONS,
+      system: `${REVIEW_TASK_INSTRUCTIONS}\n\nCall the submit_deck_review tool exactly once with your completed analysis. Every array-typed field in the tool's input must be an actual array, never a string.`,
       tools: [REVIEW_TOOL],
       tool_choice: { type: "tool", name: "submit_deck_review" },
       messages: [

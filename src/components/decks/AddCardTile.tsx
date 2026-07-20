@@ -2,6 +2,7 @@
 
 import type { Card, DeckFormat } from "@/types/card";
 import { isCardLegalInFormat } from "@/lib/format-legality";
+import { formatCardPrice } from "@/lib/format-price";
 
 export function AddCardTile({
   card,
@@ -13,6 +14,7 @@ export function AddCardTile({
   onAdd: (card: Card) => void;
 }) {
   const legal = isCardLegalInFormat(card, format);
+  const price = formatCardPrice(card.price);
 
   function handleAdd() {
     if (!legal && !window.confirm(`${card.name} is not legal in the selected format. Add it anyway?`)) {
@@ -32,6 +34,7 @@ export function AddCardTile({
         )}
       </div>
       <p className="mt-1 text-xs font-medium truncate">{card.name}</p>
+      {price && <p className="text-xs text-neutral-400">{price}</p>}
       <button
         type="button"
         onClick={handleAdd}

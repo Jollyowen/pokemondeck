@@ -1,5 +1,15 @@
 export type CardLegality = "legal" | "not_legal" | "unknown";
 
+export type CardPrice = {
+  variant: string;
+  market: number | null;
+  low: number | null;
+  high: number | null;
+  currency: "USD";
+  url: string | null;
+  updatedAt: string | null;
+};
+
 export type Card = {
   id: string;
   provider: "pokemon_tcg_api";
@@ -43,6 +53,13 @@ export type Card = {
     expanded: CardLegality;
     unlimited: CardLegality;
   };
+  /**
+   * Display-only. Never included in the AI review payload (see
+   * review-cards.ts, which maps an explicit allowlist of fields, not a
+   * spread) — the brief specifically excludes price data from what's
+   * sent to the model.
+   */
+  price: CardPrice | null;
 };
 
 export type CardSet = {

@@ -92,7 +92,7 @@ export const anthropicReviewProvider: DeckReviewProvider = {
 
     const response = await client.messages.create({
       model: env.AI_MODEL,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: REVIEW_SYSTEM_INSTRUCTIONS,
       tools: [REVIEW_TOOL],
       tool_choice: { type: "tool", name: "submit_deck_review" },
@@ -105,13 +105,26 @@ export const anthropicReviewProvider: DeckReviewProvider = {
     });
 
     const toolUse = response.content.find((block) => block.type === "tool_use");
-    if (!toolUse) throw new AiReviewOutputError();
+    if (!toolUse) {
+      console.error("Anthropic response had no tool_use block:", {
+        stopReason: response.stop_reason,
+        contentBlockTypes: response.content.map((b) => b.type),
+      });
+      throw new AiReviewOutputError();
+    }
 
     // The tool input is already a parsed object, not a string — validate
     // it the same way as the OpenAI path (via JSON round-trip) so both
     // adapters share one safety gate.
-    const parsed = parseAndValidateReviewOutput(JSON.stringify(toolUse.input));
-    if (!parsed) throw new AiReviewOutputError();
+    const rawJson = JSON.stringify(toolUse.input);
+    const parsed = parseAndValidateReviewOutput(rawJson);
+    if (!parsed) {
+      console.error(
+        "Anthropic tool_use input failed schema validation. First 1000 chars:",
+        rawJson.slice(0, 1000),
+      );
+      throw new AiReviewOutputError();
+    }
 
     return parsed;
   },

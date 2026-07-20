@@ -32,12 +32,20 @@ export const openaiReviewProvider: DeckReviewProvider = {
     });
 
     const text = response.choices[0]?.message?.content;
-    if (!text) throw new AiReviewOutputError();
+    if (!text) {
+      console.error("OpenAI response had no message content:", {
+        finishReason: response.choices[0]?.finish_reason,
+      });
+      throw new AiReviewOutputError();
+    }
 
     // Same safety gate as the Anthropic adapter — reject anything that
     // doesn't match the required shape, regardless of provider quirks.
     const parsed = parseAndValidateReviewOutput(text);
-    if (!parsed) throw new AiReviewOutputError();
+    if (!parsed) {
+      console.error("OpenAI response failed schema validation. First 1000 chars:", text.slice(0, 1000));
+      throw new AiReviewOutputError();
+    }
 
     return parsed;
   },

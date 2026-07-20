@@ -24,6 +24,7 @@ describe("normalizeCard", () => {
       types: ["Fire"],
       hp: "170",
       evolvesFrom: "Charmeleon",
+      evolvesTo: ["Mega Charizard X", "Mega Charizard Y"],
       abilities: [{ name: "Fire Spin", text: "Deal damage.", type: "Ability" }],
       attacks: [
         { name: "Flame Burst", cost: ["Fire", "Fire"], convertedEnergyCost: 2, damage: "60", text: "" },
@@ -44,6 +45,7 @@ describe("normalizeCard", () => {
       name: "Charizard",
       hp: 170,
       evolvesFrom: "Charmeleon",
+      evolvesTo: ["Mega Charizard X", "Mega Charizard Y"],
       setId: "swsh1",
       legalities: { standard: "legal", expanded: "legal", unlimited: "not_legal" },
     });
@@ -62,6 +64,7 @@ describe("normalizeCard", () => {
     expect(card.rules).toEqual([]);
     expect(card.hp).toBeNull();
     expect(card.evolvesFrom).toBeNull();
+    expect(card.evolvesTo).toEqual([]);
     expect(card.imageSmall).toBe("");
     expect(card.setId).toBe("");
   });

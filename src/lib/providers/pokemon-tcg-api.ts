@@ -24,6 +24,7 @@ type RawCard = {
   types?: string[];
   hp?: string;
   evolvesFrom?: string;
+  evolvesTo?: string[];
   abilities?: Array<{ name: string; text: string; type: string }>;
   attacks?: Array<{
     name: string;
@@ -98,6 +99,7 @@ export function normalizeCard(raw: RawCard): Card {
     types: raw.types ?? [],
     hp: raw.hp ? Number.parseInt(raw.hp, 10) || null : null,
     evolvesFrom: raw.evolvesFrom ?? null,
+    evolvesTo: raw.evolvesTo ?? [],
     abilities: (raw.abilities ?? []).map((a) => ({
       name: a.name,
       text: a.text,

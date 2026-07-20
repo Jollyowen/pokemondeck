@@ -193,6 +193,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
   }
 
   function handleAddCard(card: Card) {
+    setKnownCards((prev) => (prev[card.id] ? prev : { ...prev, [card.id]: card }));
     mutateCards((prev) => {
       const existing = prev.find((e) => e.cardId === card.id);
       if (existing) {
@@ -351,6 +352,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             format={format}
             onChangeQuantity={handleChangeQuantity}
             onRemoveAll={handleRemoveAll}
+            onAddCard={handleAddCard}
           />
         </div>
       </div>

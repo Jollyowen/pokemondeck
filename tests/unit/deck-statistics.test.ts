@@ -17,6 +17,7 @@ function makeCard(overrides: Partial<Card> & { id: string; name: string }): Card
     types: [],
     hp: 100,
     evolvesFrom: null,
+    evolvesTo: [],
     abilities: [],
     attacks: [],
     weaknesses: [],

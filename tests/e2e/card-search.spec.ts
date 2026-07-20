@@ -19,6 +19,7 @@ function sampleCard(overrides: Partial<Record<string, unknown>> = {}) {
     types: ["Fire"],
     hp: 170,
     evolvesFrom: null,
+    evolvesTo: [],
     abilities: [],
     attacks: [],
     weaknesses: [],

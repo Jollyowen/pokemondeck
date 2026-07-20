@@ -14,6 +14,7 @@ export type Card = {
   types: string[];
   hp: number | null;
   evolvesFrom: string | null;
+  evolvesTo: string[];
   abilities: Array<{
     name: string;
     text: string;

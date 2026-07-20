@@ -26,3 +26,15 @@ export async function getOrCreateOwnerId(): Promise<string> {
   });
   return id;
 }
+
+/**
+ * Read-only variant for use in Server Components (e.g. page.tsx render),
+ * where Next.js does not allow setting cookies. Returns null if no owner
+ * cookie exists yet — that's a legitimate case (a first-time visitor has
+ * no decks yet either way), not an error. The cookie itself only ever
+ * gets created inside Route Handlers, via getOrCreateOwnerId above.
+ */
+export async function getOwnerId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  return cookieStore.get(OWNER_COOKIE)?.value ?? null;
+}

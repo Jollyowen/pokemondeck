@@ -144,3 +144,119 @@ export async function updateOwnedDeck(
 
   return getOwnedDeck(deckId, ownerId);
 }
+
+export type DeckSortBy = "updated_at" | "name" | "format";
+
+export type DeckListItem = {
+  id: string;
+  name: string;
+  format: DeckFormat;
+  status: DeckStatus;
+  cardCount: number;
+  updatedAt: string;
+};
+
+export async function listOwnedDecks(ownerId: string, sortBy: DeckSortBy): Promise<DeckListItem[]> {
+  const supabase = getSupabaseServerClient();
+  const column = sortBy === "updated_at" ? "updated_at" : sortBy;
+  const ascending = sortBy !== "updated_at"; // most-recently-updated first by default; name/format alphabetical
+
+  const { data: deckRows } = await supabase
+    .from("decks")
+    .select("id, name, format, status, updated_at")
+    .eq("owner_id", ownerId)
+    .is("deleted_at", null)
+    .order(column, { ascending });
+
+  const decks =
+    (deckRows as Array<{
+      id: string;
+      name: string;
+      format: DeckFormat;
+      status: DeckStatus;
+      updated_at: string;
+    }> | null) ?? [];
+  if (decks.length === 0) return [];
+
+  const ids = decks.map((d) => d.id);
+  const { data: cardRows } = await supabase
+    .from("deck_cards")
+    .select("deck_id, quantity")
+    .in("deck_id", ids);
+
+  const counts = new Map<string, number>();
+  for (const row of (cardRows as Array<{ deck_id: string; quantity: number }> | null) ?? []) {
+    counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + row.quantity);
+  }
+
+  return decks.map((d) => ({
+    id: d.id,
+    name: d.name,
+    format: d.format,
+    status: d.status,
+    cardCount: counts.get(d.id) ?? 0,
+    updatedAt: d.updated_at,
+  }));
+}
+
+export async function hasAnyOwnedDecks(ownerId: string): Promise<boolean> {
+  const supabase = getSupabaseServerClient();
+  const { count } = await supabase
+    .from("decks")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", ownerId)
+    .is("deleted_at", null);
+  return (count ?? 0) > 0;
+}
+
+/** Soft-deletes a deck. Returns false if it didn't exist or wasn't owned by ownerId. */
+export async function softDeleteOwnedDeck(deckId: string, ownerId: string): Promise<boolean> {
+  const supabase = getSupabaseServerClient();
+  const { data } = await supabase
+    .from("decks")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", deckId)
+    .eq("owner_id", ownerId)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  return Boolean(data);
+}
+
+/** Reverses a soft delete (used for the post-delete "Undo" action). */
+export async function restoreOwnedDeck(deckId: string, ownerId: string): Promise<boolean> {
+  const supabase = getSupabaseServerClient();
+  const { data } = await supabase
+    .from("decks")
+    .update({ deleted_at: null })
+    .eq("id", deckId)
+    .eq("owner_id", ownerId)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  return Boolean(data);
+}
+
+/**
+ * Duplicates a deck's name, format and cards into a brand new deck.
+ * Deliberately never touches deck_reviews — duplicates must not inherit
+ * the original's AI reviews.
+ */
+export async function duplicateOwnedDeck(
+  deckId: string,
+  ownerId: string,
+  requestedName?: string,
+): Promise<Deck | null> {
+  const original = await getOwnedDeck(deckId, ownerId);
+  if (!original) return null;
+
+  const name = requestedName?.trim() || `${original.name} (copy)`;
+  const created = await createDeck(ownerId, name, original.format);
+
+  if (original.cards.length === 0) return created;
+
+  const updated = await updateOwnedDeck(created.id, ownerId, {
+    cards: original.cards,
+    status: original.status,
+  });
+  return updated ?? created;
+}

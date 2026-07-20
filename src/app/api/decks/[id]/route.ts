@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateDeckSchema } from "@/schemas/deck";
-import { getOwnedDeck, updateOwnedDeck } from "@/lib/deck/repository";
+import { getOwnedDeck, updateOwnedDeck, softDeleteOwnedDeck } from "@/lib/deck/repository";
 import { validateAndPersistStatus } from "@/lib/deck/service";
 import { getOrCreateOwnerId } from "@/lib/owner";
 import { withApiErrorHandling } from "@/lib/api/with-error-handling";
@@ -53,5 +53,17 @@ export const PATCH = withApiErrorHandling(
 
     const result = await validateAndPersistStatus(updated, ownerId);
     return NextResponse.json(result);
+  },
+);
+
+export const DELETE = withApiErrorHandling(
+  async (_request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+    const { id } = await params;
+    const ownerId = await getOrCreateOwnerId();
+
+    const deleted = await softDeleteOwnedDeck(id, ownerId);
+    if (!deleted) return notFound();
+
+    return NextResponse.json({ deleted: true });
   },
 );

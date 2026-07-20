@@ -1,0 +1,105 @@
+import { test, expect } from "@playwright/test";
+
+function deck(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "deck-1",
+    name: "Charizard Control",
+    format: "standard",
+    status: "draft",
+    cardCount: 42,
+    updatedAt: "2026-07-01T12:00:00.000Z",
+    ...overrides,
+  };
+}
+
+test("shows an empty state when the owner has no decks", async ({ page }) => {
+  await page.route("**/api/decks?*", (route) =>
+    route.fulfill({ json: { decks: [] } }),
+  );
+  await page.goto("/decks");
+  await expect(page.getByText("No decks yet")).toBeVisible();
+});
+
+test("lists decks with their status, format and card count", async ({ page }) => {
+  await page.route("**/api/decks?*", (route) =>
+    route.fulfill({ json: { decks: [deck()] } }),
+  );
+  await page.goto("/decks");
+  await expect(page.getByRole("link", { name: "Charizard Control" })).toBeVisible();
+  await expect(page.getByText("42 / 60 cards")).toBeVisible();
+  await expect(page.getByText("Draft")).toBeVisible();
+});
+
+test("renaming a deck sends the new name to the server", async ({ page }) => {
+  await page.route("**/api/decks?*", (route) =>
+    route.fulfill({ json: { decks: [deck()] } }),
+  );
+
+  let patchedBody: unknown = null;
+  await page.route("**/api/decks/deck-1", (route) => {
+    if (route.request().method() === "PATCH") {
+      patchedBody = route.request().postDataJSON();
+      route.fulfill({ json: { deck: deck({ name: "New Name" }), resolvedCards: {}, validation: { status: "draft", issues: [] } } });
+      return;
+    }
+    route.continue();
+  });
+
+  await page.goto("/decks");
+  await page.getByRole("button", { name: "Rename" }).click();
+  const input = page.getByRole("textbox");
+  await input.fill("New Name");
+  await input.press("Enter");
+
+  await expect.poll(() => patchedBody).toMatchObject({ name: "New Name" });
+});
+
+test("deleting a deck removes it immediately and offers undo", async ({ page }) => {
+  await page.route("**/api/decks?*", (route) =>
+    route.fulfill({ json: { decks: [deck()] } }),
+  );
+  await page.route("**/api/decks/deck-1", (route) => {
+    if (route.request().method() === "DELETE") {
+      route.fulfill({ json: { deleted: true } });
+      return;
+    }
+    route.continue();
+  });
+
+  page.on("dialog", (dialog) => dialog.accept());
+
+  await page.goto("/decks");
+  await expect(page.getByRole("link", { name: "Charizard Control" })).toBeVisible();
+  await page.getByRole("button", { name: "Delete" }).click();
+
+  await expect(page.getByRole("link", { name: "Charizard Control" })).not.toBeVisible();
+  await expect(page.getByText('Deleted "Charizard Control"')).toBeVisible();
+  await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+});
+
+test("undoing a delete restores the deck via the restore endpoint", async ({ page }) => {
+  await page.route("**/api/decks?*", (route) =>
+    route.fulfill({ json: { decks: [deck()] } }),
+  );
+  await page.route("**/api/decks/deck-1", (route) => {
+    if (route.request().method() === "DELETE") {
+      route.fulfill({ json: { deleted: true } });
+      return;
+    }
+    route.continue();
+  });
+
+  let restoreCalled = false;
+  await page.route("**/api/decks/deck-1/restore", (route) => {
+    restoreCalled = true;
+    route.fulfill({ json: { restored: true } });
+  });
+
+  page.on("dialog", (dialog) => dialog.accept());
+
+  await page.goto("/decks");
+  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Undo" }).click();
+
+  await expect.poll(() => restoreCalled).toBe(true);
+});

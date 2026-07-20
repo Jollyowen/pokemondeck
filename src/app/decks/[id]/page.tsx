@@ -9,6 +9,7 @@ import { DeckCardList } from "@/components/decks/DeckCardList";
 import { DeckStatisticsPanel } from "@/components/decks/DeckStatisticsPanel";
 import { ShareDeckPanel } from "@/components/decks/ShareDeckPanel";
 import { DeckReviewPanel } from "@/components/decks/DeckReviewPanel";
+import { CardImageModal } from "@/components/decks/CardImageModal";
 import { computeDeckStatistics } from "@/lib/deck/statistics";
 import { computeEstimatedDeckValue } from "@/lib/deck/deck-value";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
@@ -63,6 +64,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
 
   const undoSnapshot = useRef<DeckCardEntry[] | null>(null);
   const [canUndo, setCanUndo] = useState(false);
+  const [previewCard, setPreviewCard] = useState<Card | null>(null);
   const loadedRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -414,7 +416,13 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             )}
             {searchStatus === "idle" &&
               searchResults?.cards.map((card) => (
-                <AddCardTile key={card.id} card={card} format={format} onAdd={handleAddCard} />
+                <AddCardTile
+                  key={card.id}
+                  card={card}
+                  format={format}
+                  onAdd={handleAddCard}
+                  onPreview={setPreviewCard}
+                />
               ))}
             {searchStatus === "idle" && searchResults?.cards.length === 0 && (
               <p className="text-sm text-neutral-500 col-span-full">No cards found.</p>
@@ -439,6 +447,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             onChangeQuantity={handleChangeQuantity}
             onRemoveAll={handleRemoveAll}
             onAddCard={handleAddCard}
+            onPreviewCard={setPreviewCard}
           />
         </div>
       </div>
@@ -470,7 +479,15 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
         }}
       />
 
-      <DeckReviewPanel deckId={deckId} knownCards={knownCards} onApplySwap={handleApplySwap} />
+      <DeckReviewPanel
+        deckId={deckId}
+        knownCards={knownCards}
+        onApplySwap={handleApplySwap}
+        onPreviewCard={setPreviewCard}
+        onResolvedCards={(cards) => setKnownCards((prev) => ({ ...prev, ...cards }))}
+      />
+
+      {previewCard && <CardImageModal card={previewCard} onClose={() => setPreviewCard(null)} />}
     </div>
   );
 }

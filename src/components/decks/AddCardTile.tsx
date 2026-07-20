@@ -8,10 +8,12 @@ export function AddCardTile({
   card,
   format,
   onAdd,
+  onPreview,
 }: {
   card: Card;
   format: DeckFormat;
   onAdd: (card: Card) => void;
+  onPreview: (card: Card) => void;
 }) {
   const legal = isCardLegalInFormat(card, format);
   const price = formatCardPrice(card.price);
@@ -25,14 +27,21 @@ export function AddCardTile({
 
   return (
     <div className="rounded-lg border border-neutral-200 p-2">
-      <div className={legal ? "" : "grayscale opacity-50"}>
+      <button
+        type="button"
+        onClick={() => onPreview(card)}
+        aria-label={`View larger image of ${card.name}`}
+        className={`block w-full focus:outline-none focus:ring-2 focus:ring-neutral-500 rounded-md ${
+          legal ? "" : "grayscale opacity-50"
+        }`}
+      >
         {card.imageSmall ? (
           // eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image
           <img src={card.imageSmall} alt={card.name} className="w-full rounded-md" loading="lazy" />
         ) : (
           <div className="aspect-[63/88] w-full rounded-md bg-neutral-100" />
         )}
-      </div>
+      </button>
       <p className="mt-1 text-xs font-medium truncate">{card.name}</p>
       {price && <p className="text-xs text-neutral-400">{price}</p>}
       <button

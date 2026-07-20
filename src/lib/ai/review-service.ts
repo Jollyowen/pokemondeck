@@ -1,6 +1,7 @@
 import "server-only";
 import { getServerEnv } from "@/lib/env";
 import type { Deck, DeckReviewResult } from "@/types/deck";
+import type { Card as CardType } from "@/types/card";
 import { resolveDeckCards } from "@/lib/deck/resolve-cards";
 import { computeDeckStatistics } from "@/lib/deck/statistics";
 import { computeDeckReviewHash } from "@/lib/deck/review-hash";
@@ -9,6 +10,7 @@ import { gatherCandidateCards } from "@/lib/ai/candidate-cards";
 import { getDeckReviewProvider } from "@/lib/ai/provider-factory";
 import { verifyReviewResult } from "@/lib/ai/verify-review";
 import { REVIEW_PROMPT_VERSION } from "@/lib/ai/prompt";
+import { collectReferencedCardIds } from "@/lib/ai/collect-referenced-cards";
 import {
   findCachedReview,
   saveReview,
@@ -17,19 +19,40 @@ import {
   type StoredDeckReview,
 } from "@/lib/ai/review-repository";
 import { AiProviderError, ReviewRateLimitError } from "@/lib/ai/errors";
+import type { DeckCardEntry } from "@/types/deck";
 
 export type ReviewOutcome = {
   result: DeckReviewResult;
+  resolvedCards: Record<string, CardType>;
   cached: boolean;
   createdAt: string;
 };
+
+/**
+ * Resolves full card data for every card referenced anywhere in a review
+ * result (strengths/issues evidence, suggested swap remove/add) plus the
+ * deck's own cards, so the client can render names and images instead of
+ * bare IDs — this is what the review response actually ships to the
+ * browser, not just the raw result.
+ */
+async function resolveResultCards(
+  result: DeckReviewResult,
+  deckEntries: DeckCardEntry[],
+): Promise<Record<string, CardType>> {
+  const ids = collectReferencedCardIds(result, deckEntries);
+  const { cardsById } = await resolveDeckCards(
+    ids.map((id) => ({ cardId: id, cardName: "", quantity: 1 })),
+  );
+  return cardsById;
+}
 
 export async function getOrGenerateReview(deck: Deck, ownerId: string): Promise<ReviewOutcome> {
   const deckHash = computeDeckReviewHash(deck.cards, deck.format, deck.strategyArchetype, deck.strategyNotes);
 
   const cached = await findCachedReview(deck.id, deckHash);
   if (cached) {
-    return { result: cached.result, cached: true, createdAt: cached.createdAt };
+    const resolvedCards = await resolveResultCards(cached.result, deck.cards);
+    return { result: cached.result, resolvedCards, cached: true, createdAt: cached.createdAt };
   }
 
   const env = getServerEnv();
@@ -87,11 +110,18 @@ export async function getOrGenerateReview(deck: Deck, ownerId: string): Promise<
     result: verified,
   });
 
-  return { result: verified, cached: false, createdAt: stored.createdAt };
+  // Deck cards + candidate cards together already cover everything the
+  // verified result can reference (verify-review only keeps swaps/evidence
+  // that point into one of those two sets), so this is a cheap merge
+  // rather than a second resolution pass.
+  const resolvedCards = { ...cardsById, ...candidatesById };
+
+  return { result: verified, resolvedCards, cached: false, createdAt: stored.createdAt };
 }
 
 export type LatestReviewOutcome = {
   review: StoredDeckReview;
+  resolvedCards: Record<string, CardType>;
   isStale: boolean;
 } | null;
 
@@ -101,5 +131,6 @@ export async function getLatestReviewWithStaleness(deck: Deck): Promise<LatestRe
   if (!latest) return null;
 
   const currentHash = computeDeckReviewHash(deck.cards, deck.format, deck.strategyArchetype, deck.strategyNotes);
-  return { review: latest, isStale: latest.deckHash !== currentHash };
+  const resolvedCards = await resolveResultCards(latest.result, deck.cards);
+  return { review: latest, resolvedCards, isStale: latest.deckHash !== currentHash };
 }

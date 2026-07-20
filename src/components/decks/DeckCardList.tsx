@@ -5,6 +5,7 @@ import type { Card, DeckFormat } from "@/types/card";
 import type { DeckCardEntry } from "@/types/deck";
 import { isCardLegalInFormat } from "@/lib/format-legality";
 import { getEvolutionLineNames } from "@/lib/deck/evolution-line";
+import { formatCardPrice } from "@/lib/format-price";
 import { EvolutionLineSuggestions } from "@/components/decks/EvolutionLineSuggestions";
 
 const GROUP_ORDER: Array<Card["supertype"]> = ["Pokémon", "Trainer", "Energy"];
@@ -16,6 +17,7 @@ export function DeckCardList({
   onChangeQuantity,
   onRemoveAll,
   onAddCard,
+  onPreviewCard,
 }: {
   entries: DeckCardEntry[];
   cardsById: Record<string, Card>;
@@ -23,6 +25,7 @@ export function DeckCardList({
   onChangeQuantity: (cardId: string, quantity: number) => void;
   onRemoveAll: (cardId: string) => void;
   onAddCard: (card: Card) => void;
+  onPreviewCard: (card: Card) => void;
 }) {
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
@@ -58,18 +61,47 @@ export function DeckCardList({
               const legal = card ? isCardLegalInFormat(card, format) : true;
               const evolutionNames = card ? getEvolutionLineNames(card) : [];
               const isExpanded = expandedCardId === entry.cardId;
+              const price = card ? formatCardPrice(card.price) : null;
+
               return (
                 <li key={entry.cardId}>
                   <div
-                    className={`flex items-center gap-2 rounded-md border border-neutral-200 px-2 py-1.5 ${
+                    className={`flex items-center gap-2 rounded-md border border-neutral-200 p-1.5 ${
                       legal ? "" : "bg-amber-50"
                     }`}
                   >
-                    <span className="flex-1 text-sm truncate">{entry.cardName}</span>
-                    {!legal && (
-                      <span className="text-xs text-amber-700 whitespace-nowrap">Illegal</span>
+                    {card?.imageSmall ? (
+                      <button
+                        type="button"
+                        onClick={() => onPreviewCard(card)}
+                        aria-label={`View larger image of ${entry.cardName}`}
+                        className="shrink-0 rounded focus:outline-none focus:ring-2 focus:ring-neutral-500"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image */}
+                        <img src={card.imageSmall} alt="" className="w-10 rounded-sm" />
+                      </button>
+                    ) : (
+                      <div className="w-10 aspect-[63/88] shrink-0 rounded-sm bg-neutral-100" />
                     )}
-                    <div className="flex items-center gap-1">
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{entry.cardName}</p>
+                      {card && (
+                        <p className="text-xs text-neutral-500 truncate">
+                          {card.setName}
+                          {card.types.length > 0 && ` · ${card.types.join("/")}`}
+                          {card.rarity && ` · ${card.rarity}`}
+                          {price && ` · ${price}`}
+                        </p>
+                      )}
+                      {!legal && (
+                        <span className="text-xs text-amber-700 whitespace-nowrap">
+                          Not legal in this format
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
                       {evolutionNames.length > 0 && (
                         <button
                           type="button"

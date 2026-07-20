@@ -48,6 +48,7 @@ export type Card = {
   retreatCost: string[];
   convertedRetreatCost: number;
   rules: string[];
+  rarity: string | null;
   legalities: {
     standard: CardLegality;
     expanded: CardLegality;

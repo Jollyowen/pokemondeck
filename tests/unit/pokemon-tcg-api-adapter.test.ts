@@ -151,3 +151,14 @@ describe("extractPrice", () => {
     expect(price?.currency).toBe("USD");
   });
 });
+
+describe("normalizeCard — rarity", () => {
+  it("maps rarity when present", () => {
+    const card = normalizeCard({ id: "x", name: "Test", rarity: "Rare Holo" });
+    expect(card.rarity).toBe("Rare Holo");
+  });
+  it("maps rarity to null when absent", () => {
+    const card = normalizeCard({ id: "x", name: "Test" });
+    expect(card.rarity).toBeNull();
+  });
+});

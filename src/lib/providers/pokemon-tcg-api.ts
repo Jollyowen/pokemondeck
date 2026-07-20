@@ -38,6 +38,7 @@ type RawCard = {
   retreatCost?: string[];
   convertedRetreatCost?: number;
   rules?: string[];
+  rarity?: string;
   set?: { id: string; name: string; series: string; releaseDate: string };
   images?: { small?: string; large?: string };
   legalities?: { standard?: string; expanded?: string; unlimited?: string };
@@ -157,6 +158,7 @@ export function normalizeCard(raw: RawCard): Card {
     retreatCost: raw.retreatCost ?? [],
     convertedRetreatCost: raw.convertedRetreatCost ?? 0,
     rules: raw.rules ?? [],
+    rarity: raw.rarity ?? null,
     legalities: {
       standard: mapLegality(raw.legalities?.standard),
       expanded: mapLegality(raw.legalities?.expanded),

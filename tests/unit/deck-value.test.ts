@@ -26,6 +26,7 @@ function makeCard(id: string, name: string, market: number | null): Card {
     retreatCost: [],
     convertedRetreatCost: 0,
     rules: [],
+    rarity: null,
     legalities: { standard: "legal", expanded: "legal", unlimited: "legal" },
     price:
       market === null

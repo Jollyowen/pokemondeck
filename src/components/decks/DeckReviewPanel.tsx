@@ -11,18 +11,86 @@ const SEVERITY_COLOR: Record<string, string> = {
   high: "bg-red-50 text-red-700",
 };
 
-function CardRef({ id, knownCards }: { id: string; knownCards: Record<string, Card> }) {
-  return <span className="text-neutral-500">{knownCards[id]?.name ?? id}</span>;
+function CardChip({
+  id,
+  knownCards,
+  onPreviewCard,
+}: {
+  id: string;
+  knownCards: Record<string, Card>;
+  onPreviewCard: (card: Card) => void;
+}) {
+  const card = knownCards[id];
+  if (!card) return <span className="text-neutral-500">{id}</span>;
+  return (
+    <button
+      type="button"
+      onClick={() => onPreviewCard(card)}
+      className="inline-flex items-center gap-1 text-neutral-600 hover:underline"
+    >
+      {card.imageSmall && (
+        // eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image, small inline chip
+        <img src={card.imageSmall} alt="" className="w-4 h-auto rounded-sm" />
+      )}
+      {card.name}
+    </button>
+  );
+}
+
+function SwapCardGroup({
+  cards,
+  knownCards,
+  onPreviewCard,
+  sign,
+}: {
+  cards: Array<{ cardId: string; count: number }>;
+  knownCards: Record<string, Card>;
+  onPreviewCard: (card: Card) => void;
+  sign: "remove" | "add";
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {cards.map((ref) => {
+        const card = knownCards[ref.cardId];
+        return (
+          <button
+            key={ref.cardId}
+            type="button"
+            onClick={() => card && onPreviewCard(card)}
+            className="flex items-center gap-2 text-left"
+          >
+            {card?.imageSmall ? (
+              // eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image
+              <img src={card.imageSmall} alt="" className="w-10 rounded-sm shrink-0" />
+            ) : (
+              <div className="w-10 aspect-[63/88] shrink-0 rounded-sm bg-neutral-100" />
+            )}
+            <span className="text-xs">
+              <span className={sign === "remove" ? "text-red-700" : "text-green-700"}>
+                {sign === "remove" ? "−" : "+"}
+                {ref.count}×
+              </span>{" "}
+              {card?.name ?? ref.cardId}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export function DeckReviewPanel({
   deckId,
   knownCards,
   onApplySwap,
+  onPreviewCard,
+  onResolvedCards,
 }: {
   deckId: string;
   knownCards: Record<string, Card>;
   onApplySwap: (remove: Array<{ cardId: string; count: number }>, add: Array<{ cardId: string; count: number }>) => void;
+  onPreviewCard: (card: Card) => void;
+  onResolvedCards: (cards: Record<string, Card>) => void;
 }) {
   const [review, setReview] = useState<DeckReviewResult | null>(null);
   const [isStale, setIsStale] = useState(false);
@@ -38,10 +106,15 @@ export function DeckReviewPanel({
           setStatus("idle");
           return;
         }
-        const outcome = body.review as { review: { result: DeckReviewResult }; isStale: boolean } | null;
+        const outcome = body.review as {
+          review: { result: DeckReviewResult };
+          resolvedCards: Record<string, Card>;
+          isStale: boolean;
+        } | null;
         if (outcome) {
           setReview(outcome.review.result);
           setIsStale(outcome.isStale);
+          onResolvedCards(outcome.resolvedCards);
         }
         setStatus("idle");
       })
@@ -65,9 +138,10 @@ export function DeckReviewPanel({
         setErrorMessage(body.error.message);
         return;
       }
-      const outcome = body as { result: DeckReviewResult };
+      const outcome = body as { result: DeckReviewResult; resolvedCards: Record<string, Card> };
       setReview(outcome.result);
       setIsStale(false);
+      onResolvedCards(outcome.resolvedCards);
       setStatus("idle");
     } catch {
       setStatus("error");
@@ -129,12 +203,9 @@ export function DeckReviewPanel({
                     <p className="font-medium">{s.title}</p>
                     <p className="text-neutral-600">{s.explanation}</p>
                     {s.evidenceCardIds.length > 0 && (
-                      <p className="text-xs mt-0.5">
-                        {s.evidenceCardIds.map((id, j) => (
-                          <span key={id}>
-                            {j > 0 && ", "}
-                            <CardRef id={id} knownCards={knownCards} />
-                          </span>
+                      <p className="text-xs mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                        {s.evidenceCardIds.map((id) => (
+                          <CardChip key={id} id={id} knownCards={knownCards} onPreviewCard={onPreviewCard} />
                         ))}
                       </p>
                     )}
@@ -158,12 +229,9 @@ export function DeckReviewPanel({
                     </div>
                     <p className="text-neutral-600 mt-0.5">{issue.explanation}</p>
                     {issue.evidenceCardIds.length > 0 && (
-                      <p className="text-xs mt-0.5">
-                        {issue.evidenceCardIds.map((id, j) => (
-                          <span key={id}>
-                            {j > 0 && ", "}
-                            <CardRef id={id} knownCards={knownCards} />
-                          </span>
+                      <p className="text-xs mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                        {issue.evidenceCardIds.map((id) => (
+                          <CardChip key={id} id={id} knownCards={knownCards} onPreviewCard={onPreviewCard} />
                         ))}
                       </p>
                     )}
@@ -180,19 +248,25 @@ export function DeckReviewPanel({
                 Optional — nothing here is applied automatically. Review each suggestion and apply it yourself if
                 you agree.
               </p>
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {review.suggestedSwaps.map((swap, i) => (
-                  <li key={i} className="rounded-md border border-neutral-200 p-2 text-sm">
-                    <p>
-                      <span className="text-red-700">
-                        −{swap.remove.map((r) => `${r.count}× ${knownCards[r.cardId]?.name ?? r.cardId}`).join(", ")}
-                      </span>
-                      {"  "}
-                      <span className="text-green-700">
-                        +{swap.add.map((a) => `${a.count}× ${knownCards[a.cardId]?.name ?? a.cardId}`).join(", ")}
-                      </span>
-                    </p>
-                    <p className="text-neutral-600 mt-1">{swap.reason}</p>
+                  <li key={i} className="rounded-md border border-neutral-200 p-3">
+                    <div className="flex items-center gap-3">
+                      <SwapCardGroup
+                        cards={swap.remove}
+                        knownCards={knownCards}
+                        onPreviewCard={onPreviewCard}
+                        sign="remove"
+                      />
+                      <span className="text-neutral-300 text-lg shrink-0">→</span>
+                      <SwapCardGroup
+                        cards={swap.add}
+                        knownCards={knownCards}
+                        onPreviewCard={onPreviewCard}
+                        sign="add"
+                      />
+                    </div>
+                    <p className="text-sm text-neutral-600 mt-2">{swap.reason}</p>
                     <button
                       type="button"
                       onClick={() => onApplySwap(swap.remove, swap.add)}

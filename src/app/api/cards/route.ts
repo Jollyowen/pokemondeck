@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { cardSearchSchema } from "@/schemas/card-search";
 import { pokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api";
 import { setCachedCards, searchCachedCardsByName } from "@/lib/cache/card-cache";
+import { withApiErrorHandling } from "@/lib/api/with-error-handling";
 import type { ApiError } from "@/types/api";
 import type { CardSearchResult } from "@/types/card";
 
-export async function GET(request: NextRequest) {
+export const GET = withApiErrorHandling(async (request: NextRequest) => {
   const rawParams = Object.fromEntries(request.nextUrl.searchParams.entries());
   const parsed = cardSearchSchema.safeParse(rawParams);
 
@@ -58,4 +59,4 @@ export async function GET(request: NextRequest) {
     }
     throw error;
   }
-}
+});

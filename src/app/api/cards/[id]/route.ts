@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api";
 import { getCachedCard, setCachedCards } from "@/lib/cache/card-cache";
+import { withApiErrorHandling } from "@/lib/api/with-error-handling";
 import type { ApiError } from "@/types/api";
 
-export async function GET(
+export const GET = withApiErrorHandling(async (
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-) {
+) => {
   const { id } = await params;
 
   const cached = await getCachedCard(id);
@@ -41,4 +42,4 @@ export async function GET(
     }
     throw error;
   }
-}
+});

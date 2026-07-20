@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createDeckSchema } from "@/schemas/deck";
 import { createDeck } from "@/lib/deck/repository";
 import { getOrCreateOwnerId } from "@/lib/owner";
+import { withApiErrorHandling } from "@/lib/api/with-error-handling";
 import type { ApiError } from "@/types/api";
 
-export async function POST(request: NextRequest) {
+export const POST = withApiErrorHandling(async (request: NextRequest) => {
   const body = await request.json().catch(() => null);
   const parsed = createDeckSchema.safeParse(body);
 
@@ -23,4 +24,4 @@ export async function POST(request: NextRequest) {
   const deck = await createDeck(ownerId, parsed.data.name, parsed.data.format);
 
   return NextResponse.json({ deck }, { status: 201 });
-}
+});

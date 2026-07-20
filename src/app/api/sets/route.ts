@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { pokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api";
 import { getCachedSets, setCachedSets } from "@/lib/cache/card-cache";
+import { withApiErrorHandling } from "@/lib/api/with-error-handling";
 import type { ApiError } from "@/types/api";
 
-export async function GET() {
+export const GET = withApiErrorHandling(async () => {
   const cached = await getCachedSets();
   if (cached && cached.fresh) {
     return NextResponse.json({ sets: cached.sets });
@@ -28,4 +29,4 @@ export async function GET() {
     }
     throw error;
   }
-}
+});

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -11,9 +12,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen flex flex-col">
         <header className="border-b border-neutral-200 px-4 py-3">
-          <a href="/" className="font-semibold">
+			<Link href="/" className="font-semibold">
             TCG Deck Builder
-          </a>
+          </Link>
         </header>
         <main className="flex-1 px-4 py-6 max-w-5xl mx-auto w-full">{children}</main>
         <footer className="border-t border-neutral-200 px-4 py-4 text-sm text-neutral-500">

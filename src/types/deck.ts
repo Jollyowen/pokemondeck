@@ -109,3 +109,26 @@ export type DeckReviewResult = {
 export interface DeckReviewProvider {
   reviewDeck(input: DeckReviewInput): Promise<DeckReviewResult>;
 }
+
+export type EvolutionStageDistribution = {
+  basic: number;
+  stage1: number;
+  stage2: number;
+  other: number;
+};
+
+export type DeckStatistics = {
+  totalPokemon: number;
+  totalTrainer: number;
+  totalEnergy: number;
+  pokemonTypeDistribution: Record<string, number>;
+  energyTypeDistribution: Record<string, number>;
+  evolutionStageDistribution: EvolutionStageDistribution;
+  averageRetreatCost: number;
+  attackEnergyCostDistribution: Record<number, number>;
+  drawSupportCount: number;
+  searchSupportCount: number;
+  formatIllegalCount: number;
+  /** Statistics whose value depends on interpreting free text, not just structured fields. */
+  estimatedFields: string[];
+};

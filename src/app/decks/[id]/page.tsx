@@ -1,11 +1,13 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CardSearchFilters, type CardFilterState } from "@/components/cards/CardSearchFilters";
 import { AddCardTile } from "@/components/decks/AddCardTile";
 import { Pagination } from "@/components/cards/Pagination";
 import { DeckCardList } from "@/components/decks/DeckCardList";
+import { DeckStatisticsPanel } from "@/components/decks/DeckStatisticsPanel";
+import { computeDeckStatistics } from "@/lib/deck/statistics";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { isApiError } from "@/types/api";
 import type { Card, CardSearchResult, DeckFormat, CardSet } from "@/types/card";
@@ -56,6 +58,13 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
   const [canUndo, setCanUndo] = useState(false);
   const loadedRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Pure client-side calculation from already-available state — updates
+  // immediately on every deck change, no network round-trip and no AI call.
+  const statistics = useMemo(
+    () => computeDeckStatistics(cards, knownCards, format),
+    [cards, knownCards, format],
+  );
 
   // Load the deck once on mount.
   useEffect(() => {
@@ -345,6 +354,11 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
           />
         </div>
       </div>
+
+      <section className="rounded-lg border border-neutral-200 p-4">
+        <h2 className="font-medium mb-3">Statistics</h2>
+        <DeckStatisticsPanel stats={statistics} />
+      </section>
     </div>
   );
 }

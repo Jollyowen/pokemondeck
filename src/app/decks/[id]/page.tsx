@@ -4,6 +4,7 @@ import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CardSearchFilters, type CardFilterState } from "@/components/cards/CardSearchFilters";
 import { AddCardTile } from "@/components/decks/AddCardTile";
+import { Pagination } from "@/components/cards/Pagination";
 import { DeckCardList } from "@/components/decks/DeckCardList";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { isApiError } from "@/types/api";
@@ -46,6 +47,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
 
   const [sets, setSets] = useState<CardSet[]>([]);
   const [searchFilters, setSearchFilters] = useState<CardFilterState>(DEFAULT_FILTERS);
+  const [searchPage, setSearchPage] = useState(1);
   const [searchResults, setSearchResults] = useState<CardSearchResult | null>(null);
   const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "error">("idle");
   const debouncedSearchName = useDebouncedValue(searchFilters.name, 350);
@@ -97,10 +99,15 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
       .catch(() => {});
   }, []);
 
+  // Reset to page 1 whenever a filter actually changes.
+  useEffect(() => {
+    setSearchPage(1);
+  }, [debouncedSearchName, searchFilters.supertype, searchFilters.pokemonType, searchFilters.setId, searchFilters.rarity]);
+
   // Search the catalogue while the deck stays visible alongside it.
   useEffect(() => {
     setSearchStatus("loading");
-    const params = new URLSearchParams({ page: "1", pageSize: "12" });
+    const params = new URLSearchParams({ page: String(searchPage), pageSize: "12" });
     if (debouncedSearchName) params.set("name", debouncedSearchName);
     if (searchFilters.supertype) params.set("supertype", searchFilters.supertype);
     if (searchFilters.pokemonType) params.set("pokemonType", searchFilters.pokemonType);
@@ -128,7 +135,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
         if (!controller.signal.aborted) setSearchStatus("error");
       });
     return () => controller.abort();
-  }, [debouncedSearchName, searchFilters.supertype, searchFilters.pokemonType, searchFilters.setId, searchFilters.rarity]);
+  }, [debouncedSearchName, searchFilters.supertype, searchFilters.pokemonType, searchFilters.setId, searchFilters.rarity, searchPage]);
 
   const scheduleSave = useCallback(
     (nextName: string, nextFormat: DeckFormat, nextCards: DeckCardEntry[]) => {
@@ -317,6 +324,14 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
               <p className="text-sm text-neutral-500 col-span-full">No cards found.</p>
             )}
           </div>
+          {searchStatus === "idle" && searchResults && (
+            <Pagination
+              page={searchResults.page}
+              pageSize={searchResults.pageSize}
+              totalCount={searchResults.totalCount}
+              onPageChange={setSearchPage}
+            />
+          )}
         </div>
 
         <div>

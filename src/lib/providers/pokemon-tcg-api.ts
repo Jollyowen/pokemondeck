@@ -254,11 +254,14 @@ export const pokemonTcgApiProvider: CardProvider = {
       q: query,
       page: String(page),
       pageSize: String(pageSize),
-      // "id" is a stable, unique tiebreaker. Sorting by name alone leaves
-      // ties (many cards genuinely share the same name across printings)
-      // in backend-dependent order, which can shuffle between requests and
-      // cause pagination to skip or duplicate results across pages.
-      orderBy: "name,id",
+      // "id" is a stable, unique tiebreaker for cards released on the same
+      // date, for the same pagination-stability reason as before. Ordering
+      // by release date (newest first) rather than name also means a
+      // name-based lookup naturally surfaces a Pokémon's most recent
+      // printing first — the one most likely to be legal in the current
+      // format — rather than depending on alphabetical set-ID ordering,
+      // which has no relationship to recency at all.
+      orderBy: "-set.releaseDate,id",
     });
 
     return {

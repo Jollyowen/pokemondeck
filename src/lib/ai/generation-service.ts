@@ -5,7 +5,7 @@ import type { Deck, StrategyArchetype } from "@/types/deck";
 import { gatherDeckGenerationCandidates } from "@/lib/ai/candidate-cards";
 import { toDeckReviewCard } from "@/lib/deck/review-cards";
 import { getDeckGenerationProvider } from "@/lib/ai/provider-factory";
-import { buildVerifiedGeneratedDeck } from "@/lib/ai/verify-generation";
+import { buildVerifiedGeneratedDeck, ensureEvolutionPrerequisites } from "@/lib/ai/verify-generation";
 import { createDeck, updateOwnedDeck } from "@/lib/deck/repository";
 import { validateAndPersistStatus, type DeckWithValidation } from "@/lib/deck/service";
 import { countGenerationsInLast24Hours, recordGeneration } from "@/lib/ai/generation-repository";
@@ -79,7 +79,10 @@ export async function generateDeck(
     throw new AiProviderError("The AI deck generation service is temporarily unavailable. Please try again shortly.");
   }
 
-  const verifiedCards = buildVerifiedGeneratedDeck(raw.cards, candidatesById);
+  const verifiedCards = ensureEvolutionPrerequisites(
+    buildVerifiedGeneratedDeck(raw.cards, candidatesById),
+    candidatesById,
+  );
 
   const targetIncludedInFinalDeck = verifiedCards.some((e) => targetPrintingIds.has(e.cardId));
   console.log("AI deck generation: final deck built", {

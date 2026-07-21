@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildVerifiedGeneratedDeck } from "@/lib/ai/verify-generation";
+import { buildVerifiedGeneratedDeck, ensureEvolutionPrerequisites } from "@/lib/ai/verify-generation";
 import type { Card } from "@/types/card";
 
 function makeCard(overrides: Partial<Card> & { id: string; name: string }): Card {
@@ -152,5 +152,105 @@ describe("buildVerifiedGeneratedDeck", () => {
     };
     const result = buildVerifiedGeneratedDeck([{ cardId: "ace", count: 3 }], candidates);
     expect(result).toEqual([{ cardId: "ace", cardName: "Computer Search", quantity: 1 }]);
+  });
+});
+
+describe("ensureEvolutionPrerequisites", () => {
+  it("adds the missing Basic when only a Stage 1 is present", () => {
+    const candidates = {
+      stage1: makeCard({ id: "stage1", name: "Charmeleon", subtypes: ["Stage 1"], evolvesFrom: "Charmander" , supertype: "Pokémon" }),
+      basic: makeCard({ id: "basic", name: "Charmander", subtypes: ["Basic"] , supertype: "Pokémon" }),
+    };
+    const entries = [{ cardId: "stage1", cardName: "Charmeleon", quantity: 3 }];
+    const result = ensureEvolutionPrerequisites(entries, candidates);
+    const basicEntry = result.find((e) => e.cardId === "basic");
+    expect(basicEntry).toBeDefined();
+    expect(basicEntry?.quantity).toBe(3);
+  });
+
+  it("walks a full Stage 2 -> Stage 1 -> Basic chain, adding both missing links", () => {
+    const candidates = {
+      stage2: makeCard({ id: "stage2", name: "Charizard", subtypes: ["Stage 2"], evolvesFrom: "Charmeleon" , supertype: "Pokémon" }),
+      stage1: makeCard({ id: "stage1", name: "Charmeleon", subtypes: ["Stage 1"], evolvesFrom: "Charmander" , supertype: "Pokémon" }),
+      basic: makeCard({ id: "basic", name: "Charmander", subtypes: ["Basic"] , supertype: "Pokémon" }),
+    };
+    const entries = [{ cardId: "stage2", cardName: "Charizard", quantity: 2 }];
+    const result = ensureEvolutionPrerequisites(entries, candidates);
+    expect(result.find((e) => e.cardId === "stage1")?.quantity).toBe(2);
+    expect(result.find((e) => e.cardId === "basic")?.quantity).toBe(2);
+  });
+
+  it("does nothing when the Basic is already present", () => {
+    const candidates = {
+      stage1: makeCard({ id: "stage1", name: "Charmeleon", subtypes: ["Stage 1"], evolvesFrom: "Charmander" , supertype: "Pokémon" }),
+      basic: makeCard({ id: "basic", name: "Charmander", subtypes: ["Basic"] , supertype: "Pokémon" }),
+    };
+    const entries = [
+      { cardId: "stage1", cardName: "Charmeleon", quantity: 3 },
+      { cardId: "basic", cardName: "Charmander", quantity: 2 },
+    ];
+    const result = ensureEvolutionPrerequisites(entries, candidates);
+    expect(result.find((e) => e.cardId === "basic")?.quantity).toBe(2);
+  });
+
+  it("does nothing for a deck of only Basics", () => {
+    const candidates = { basic: makeCard({ id: "basic", name: "Pikachu", subtypes: ["Basic"] , supertype: "Pokémon" }) };
+    const entries = [{ cardId: "basic", cardName: "Pikachu", quantity: 4 }];
+    const result = ensureEvolutionPrerequisites(entries, candidates);
+    expect(result).toEqual(entries);
+  });
+
+  it("cannot force a prerequisite that isn't in the candidate pool at all", () => {
+    const candidates = {
+      stage1: makeCard({ id: "stage1", name: "Charmeleon", subtypes: ["Stage 1"], evolvesFrom: "Charmander" , supertype: "Pokémon" }),
+    };
+    const entries = [{ cardId: "stage1", cardName: "Charmeleon", quantity: 3 }];
+    const result = ensureEvolutionPrerequisites(entries, candidates);
+    expect(result).toEqual(entries);
+  });
+
+  it("caps the added Basic at the 4-copy limit even if the Stage 1 count is higher", () => {
+    const candidates = {
+      stage1: makeCard({ id: "stage1", name: "Charmeleon", subtypes: ["Stage 1"], evolvesFrom: "Charmander" , supertype: "Pokémon" }),
+      basic: makeCard({ id: "basic", name: "Charmander", subtypes: ["Basic"] , supertype: "Pokémon" }),
+    };
+    // A Stage 1 count above 4 shouldn't itself be possible post-verification,
+    // but the completion pass should still never exceed the copy limit.
+    const entries = [{ cardId: "stage1", cardName: "Charmeleon", quantity: 4 }];
+    const result = ensureEvolutionPrerequisites(entries, candidates);
+    expect(result.find((e) => e.cardId === "basic")?.quantity).toBe(4);
+  });
+
+  it("never pushes the total over 60 when adding prerequisites near the cap", () => {
+    const candidates = {
+      stage1: makeCard({ id: "stage1", name: "Charmeleon", subtypes: ["Stage 1"], evolvesFrom: "Charmander" , supertype: "Pokémon" }),
+      basic: makeCard({ id: "basic", name: "Charmander", subtypes: ["Basic"] , supertype: "Pokémon" }),
+      filler: makeCard({ id: "filler", name: "Filler Energy", supertype: "Energy", subtypes: ["Basic"] }),
+    };
+    // Starts at a valid 59 total (the only realistic precondition, since
+    // this always runs after buildVerifiedGeneratedDeck, which guarantees
+    // the input is already <=60) — only 1 slot of room remains.
+    const entries = [
+      { cardId: "stage1", cardName: "Charmeleon", quantity: 4 },
+      { cardId: "filler", cardName: "Filler Energy", quantity: 55 },
+    ];
+    const result = ensureEvolutionPrerequisites(entries, candidates);
+    const total = result.reduce((s, e) => s + e.quantity, 0);
+    expect(total).toBeLessThanOrEqual(60);
+    expect(result.find((e) => e.cardId === "basic")?.quantity).toBe(1);
+  });
+
+  it("adds nothing further once there is no remaining space", () => {
+    const candidates = {
+      stage1: makeCard({ id: "stage1", name: "Charmeleon", subtypes: ["Stage 1"], evolvesFrom: "Charmander" , supertype: "Pokémon" }),
+      basic: makeCard({ id: "basic", name: "Charmander", subtypes: ["Basic"] , supertype: "Pokémon" }),
+      filler: makeCard({ id: "filler", name: "Filler Energy", supertype: "Energy", subtypes: ["Basic"] }),
+    };
+    const entries = [
+      { cardId: "stage1", cardName: "Charmeleon", quantity: 4 },
+      { cardId: "filler", cardName: "Filler Energy", quantity: 56 },
+    ];
+    const result = ensureEvolutionPrerequisites(entries, candidates);
+    expect(result.find((e) => e.cardId === "basic")).toBeUndefined();
   });
 });

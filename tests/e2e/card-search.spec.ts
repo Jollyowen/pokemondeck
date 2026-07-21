@@ -114,7 +114,10 @@ test("pagination requests the next page", async ({ page }) => {
 
   await page.goto("/cards");
   await expect(page.getByText("Page 1 of 2")).toBeVisible();
-  await page.getByRole("button", { name: "Next" }).click();
+  // exact: true — Next.js's dev-mode floating dev-tools button has an
+  // accessible name of "Open Next.js Dev Tools", which contains "Next" as
+  // a substring and would otherwise ambiguously match too.
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByText("Page 2 of 2")).toBeVisible();
   expect(requestedPage).toBe("2");
 });

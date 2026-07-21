@@ -4,20 +4,17 @@ import { fixtureDeck, fixtureCard, fixtureReviewResult } from "../fixtures/deck-
 const deckCard = fixtureCard({ id: "deck-card-1", name: "Trainer A" });
 const candidateCard = fixtureCard({ id: "candidate-1", name: "Trainer B", supertype: "Trainer" });
 
-test.beforeEach(async ({ page }) => {
-  await page.route("**/api/decks/deck-1", (route) => {
-    if (route.request().method() === "GET") {
-      route.fulfill({
-        json: {
-          deck: fixtureDeck({ cards: [{ cardId: "deck-card-1", cardName: "Trainer A", quantity: 4 }] }),
-          resolvedCards: { "deck-card-1": deckCard },
-          validation: { status: "draft", issues: [] },
-        },
-      });
-      return;
-    }
-    route.continue();
+function mockDeckGet(route: import("@playwright/test").Route) {
+  route.fulfill({
+    json: {
+      deck: fixtureDeck({ cards: [{ cardId: "deck-card-1", cardName: "Trainer A", quantity: 4 }] }),
+      resolvedCards: { "deck-card-1": deckCard },
+      validation: { status: "draft", issues: [] },
+    },
   });
+}
+
+test.beforeEach(async ({ page }) => {
   await page.route("**/api/sets", (route) => route.fulfill({ json: { sets: [] } }));
   await page.route("**/api/cards?*", (route) =>
     route.fulfill({ json: { cards: [], page: 1, pageSize: 12, totalCount: 0 } }),
@@ -25,6 +22,10 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("generating a review shows suggested swaps with real card names and images, not raw IDs", async ({ page }) => {
+  await page.route("**/api/decks/deck-1", (route) => {
+    if (route.request().method() === "GET") return mockDeckGet(route);
+    route.abort();
+  });
   await page.route("**/api/decks/deck-1/reviews/latest", (route) => route.fulfill({ json: { review: null } }));
   await page.route("**/api/decks/deck-1/review", (route) => {
     const result = fixtureReviewResult({
@@ -51,11 +52,28 @@ test("generating a review shows suggested swaps with real card names and images,
 
   await expect(page.getByText("deck-card-1")).not.toBeVisible();
   await expect(page.getByText("candidate-1")).not.toBeVisible();
-  await expect(page.getByText("Trainer A")).toBeVisible();
-  await expect(page.getByText("Trainer B")).toBeVisible();
+  // exact: true, since "Trainer A" is also a substring of the swap group's
+  // accessible name ("−4× Trainer A"), which would otherwise ambiguously
+  // match both elements under Playwright's default substring text search.
+  await expect(page.getByText("Trainer A", { exact: true })).toBeVisible();
+  await expect(page.getByText("Trainer B", { exact: true })).toBeVisible();
 });
 
 test("applying a swap can only be actioned once", async ({ page }) => {
+  await page.route("**/api/decks/deck-1", (route) => {
+    if (route.request().method() === "GET") return mockDeckGet(route);
+    if (route.request().method() === "PATCH") {
+      route.fulfill({
+        json: {
+          deck: fixtureDeck(),
+          resolvedCards: {},
+          validation: { status: "draft", issues: [] },
+        },
+      });
+      return;
+    }
+    route.abort();
+  });
   await page.route("**/api/decks/deck-1/reviews/latest", (route) => route.fulfill({ json: { review: null } }));
   await page.route("**/api/decks/deck-1/review", (route) => {
     const result = fixtureReviewResult({
@@ -75,19 +93,6 @@ test("applying a swap can only be actioned once", async ({ page }) => {
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     });
-  });
-  await page.route("**/api/decks/deck-1", (route) => {
-    if (route.request().method() === "PATCH") {
-      route.fulfill({
-        json: {
-          deck: fixtureDeck(),
-          resolvedCards: {},
-          validation: { status: "draft", issues: [] },
-        },
-      });
-      return;
-    }
-    route.continue();
   });
 
   await page.goto("/decks/deck-1");

@@ -53,7 +53,13 @@ test.describe("share panel in the deck editor", () => {
     await page.goto("/decks/deck-1");
     await page.getByRole("button", { name: "Enable sharing" }).click();
 
-    await expect(page.getByDisplayValue(/\/shared\/abc123$/)).toBeVisible();
+    // getByLabel matches the input's aria-label ("Shareable deck link");
+    // toHaveValue is the correct Playwright assertion for an input's
+    // value (there is no getByDisplayValue in Playwright's own API —
+    // that's a Testing Library method, not one of ours).
+    const shareUrlInput = page.getByLabel("Shareable deck link");
+    await expect(shareUrlInput).toBeVisible();
+    await expect(shareUrlInput).toHaveValue(/\/shared\/abc123$/);
     await expect(page.getByAltText("QR code linking to the shared deck")).toBeVisible();
     await expect(page.getByRole("button", { name: "Revoke sharing" })).toBeVisible();
   });

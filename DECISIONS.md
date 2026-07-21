@@ -699,3 +699,93 @@ and any ambiguities resolved during implementation.
   final verified deck. This is what should make the *next* report of this
   shape immediately diagnosable from Vercel's logs, rather than requiring
   another round of hypothesis-and-guess the way both of these fixes did.
+
+## Fix: search ordering, and forcing evolution prerequisites into generated decks
+
+- **All card search now orders newest-to-oldest by default**
+  (`orderBy: "-set.releaseDate,id"`, replacing `"name,id"`), per explicit
+  request. This applies everywhere `searchCards` is used — the `/cards`
+  catalogue, the deck builder's search pane, and every AI candidate
+  lookup — since they all share one provider method. `id` is kept as a
+  secondary sort key for the same pagination-stability reason as before
+  (many cards share an identical release date, same as many sharing an
+  identical name). This also directly narrows the class of bug the two
+  generation fixes above were about: a name-based lookup now naturally
+  surfaces a Pokémon's most recent printing first, rather than depending
+  on an alphabetical-by-set-ID order that has no relationship to recency.
+- **Generated decks now deterministically include evolution
+  prerequisites.** Real report: a generated deck included Stage 1 Pokémon
+  without any copies of the Basic they evolve from — essentially
+  unplayable, since there'd be no legal way to get that Basic into play in
+  the first place. Rather than only asking the model to do this correctly
+  (advisory, and evidently not reliable enough on its own), added
+  `ensureEvolutionPrerequisites` — a deterministic post-processing pass,
+  run immediately after `buildVerifiedGeneratedDeck`, that walks the full
+  evolution chain (Stage 2 → Stage 1 → Basic) and adds a matching
+  candidate-pool printing for any missing link. Same discipline as the
+  rest of verification: never invents a card outside the candidate pool,
+  added quantity is capped by the normal copy limit and by remaining space
+  under 60, and a prerequisite that genuinely isn't in the candidate pool
+  simply can't be forced — the deck will show the normal validation issue
+  once it lands in the editor, same as if a person had built it that way
+  by hand. Covered by 8 new unit tests; two of them initially failed for a
+  mundane reason (a missing `supertype: "Pokémon"` override in the test
+  fixtures themselves, not the implementation) — fixed and confirmed
+  passing before wiring this into the actual generation service.
+- This is a genuinely different kind of fix from the two before it in this
+  session: the previous two were bugs in *finding* real cards (excluded by
+  an over-eager filter, or missed by too small a page size). This one is
+  a new deterministic *rule*, enforced by construction rather than left to
+  the model's judgment — the same category of thing copy limits and the
+  60-card cap already were, just not implemented until a real deck
+  surfaced the gap.
+
+## Fix: e2e test failures found by CI's first real run
+
+- CI ran the Playwright suite for real for the first time (still can't be
+  executed in this sandbox — see the Testing scope section) and correctly
+  caught 4 failures. None were app bugs; all were mistakes in the test
+  code itself:
+  1. **`ai-review-flow.spec.ts` — strict-mode text ambiguity.**
+     `getByText("Trainer A")` matched two elements: the deck-list entry's
+     name and the swap group's accessible name (`"−4× Trainer A"`, which
+     contains "Trainer A" as a substring under Playwright's default
+     non-exact text matching). Fixed with `{ exact: true }`.
+  2. **`ai-review-flow.spec.ts` — the second test timed out entirely.**
+     Root cause: it registered a *second* `page.route` handler for the
+     same `/api/decks/deck-1` URL pattern already mocked in
+     `beforeEach`, and called `route.continue()` for methods it didn't
+     explicitly handle. `route.continue()` sends the request to the real
+     network — it does **not** fall back to an earlier-registered
+     `page.route` handler, which is an easy assumption to get wrong
+     coming from other mocking libraries. Since there's no real backend
+     in CI, that GET request just hung. Fixed by making each test's
+     handler fully self-contained (handles GET, and PATCH where needed,
+     directly) and using `route.abort()` instead of `route.continue()`
+     for anything unhandled, so an unmocked request fails fast instead of
+     hanging against a nonexistent server.
+  3. **`card-search.spec.ts` — pagination "Next" button ambiguity.**
+     Next.js's dev-mode floating dev-tools button has the accessible name
+     "Open Next.js Dev Tools", which contains "Next" as a substring —
+     colliding with our own pagination button under default (non-exact)
+     role-name matching. Only manifests when running against `next dev`
+     (which is what Playwright's `webServer` uses), not in production.
+     Fixed with `{ exact: true }`.
+  4. **`deck-sharing.spec.ts` — `TypeError: page.getByDisplayValue is not
+     a function`.** A genuine mistake on my part: `getByDisplayValue` is a
+     Testing Library method, not part of Playwright's own API — it simply
+     doesn't exist here. Fixed by using `getByLabel("Shareable deck
+     link")` (matching the `aria-label` added to that input during the
+     Phase 8 accessibility pass) combined with the correct `toHaveValue`
+     assertion for checking an input's value.
+- Also bumped `actions/checkout` and `actions/setup-node` to v5 and the
+  workflow's `node-version` to 22, clearing the "Node.js 20 deprecated"
+  warnings GitHub was surfacing on every run (the previous v4 actions
+  targeted a Node 20 runtime for their own execution, which GitHub is
+  phasing out — unrelated to what Node version our own build/test scripts
+  run under).
+- Worth naming plainly: this is the value of actually running the suite
+  for real, which this sandbox has never been able to do. Every fix here
+  came from a genuine CI failure with a full stack trace, not from
+  guessing — which is a meaningfully different (and better) situation than
+  the "written but never executed" state these tests were in before.

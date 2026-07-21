@@ -789,3 +789,50 @@ and any ambiguities resolved during implementation.
   came from a genuine CI failure with a full stack trace, not from
   guessing — which is a meaningfully different (and better) situation than
   the "written but never executed" state these tests were in before.
+
+## Fix: real cards in a generated deck permanently showing as "could not be found"
+
+- Real report: a freshly generated deck showed 14 `CARD_NOT_FOUND`
+  validation errors, all for cards that had to have been real at
+  generation time — `buildVerifiedGeneratedDeck` only ever accepts card
+  IDs that were present in the candidate pool it was given, so a
+  genuinely invented ID could never have reached the saved deck in the
+  first place.
+- Found two compounding issues while tracing it:
+  1. **Candidate cards gathered for AI features (both review and
+     generation) were never written to the card cache.** Every other path
+     in the app that fetches cards from the provider (the main search
+     route, single-card lookups) writes results to `card_cache` as a
+     matter of course — candidate-gathering was the one place that never
+     did. This meant a freshly generated deck's cards had *zero* cache
+     coverage: every single subsequent page load depended on a live
+     re-resolution succeeding perfectly, forever, for every card in the
+     deck, with no cached fallback if it didn't. Fixed by caching
+     candidates as they're gathered, in both `gatherCandidateCards` (AI
+     review) and `gatherDeckGenerationCandidates` (AI deck generation).
+     This alone likely accounts for most of the actual failure — once
+     cached, re-resolution never needs to hit the provider again for
+     those specific cards at all.
+  2. **The batch card-lookup query was a single unbounded OR clause over
+     every requested ID at once** (`id:a OR id:b OR id:c ...`). A
+     generated deck can easily need 20-40+ distinct IDs resolved in one
+     call. A single large OR query is exactly the shape of request that
+     can silently lose a subset of clauses under some provider-side
+     limit — no error, just fewer results than requested, which is
+     indistinguishable from "these specific cards don't exist" once it
+     reaches the validator. Fixed by chunking `getCards` into batches of
+     20 IDs, and — as a second layer of defense — falling back to an
+     individual single-card lookup for any ID that still doesn't come
+     back from its batch, before giving up on it.
+- Added diagnostic logging in `resolveDeckCards` (the shared resolution
+  path used by every deck view/edit/validate) for any IDs that remain
+  unresolved after both the cache and the (now more robust) live lookup,
+  so a future recurrence — of this or a different underlying cause — shows
+  up immediately in Vercel's logs with the specific IDs involved, rather
+  than requiring another round of hypothesis-and-guess.
+- Didn't add a unit test for the batch-chunking change specifically: it's
+  real network I/O (`fetch`) inside `pokemonTcgApiProvider`, the same
+  category as `searchCards`/`getCard`, neither of which has ever had a
+  direct unit test in this codebase — only the pure functions alongside
+  them (`normalizeCard`, `buildSearchQuery`, `extractPrice`) do. Kept that
+  existing boundary rather than bolt on fetch-mocking for one method.

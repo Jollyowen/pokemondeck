@@ -4,6 +4,7 @@ import type { DeckCardEntry, DeckStatistics } from "@/types/deck";
 import { pokemonTcgApiProvider } from "@/lib/providers/pokemon-tcg-api";
 import { getEvolutionLineNames } from "@/lib/deck/evolution-line";
 import { isCardLegalInFormat } from "@/lib/format-legality";
+import { setCachedCards } from "@/lib/cache/card-cache";
 
 const MAX_CANDIDATES = 30;
 
@@ -138,7 +139,9 @@ export async function gatherCandidateCards(
     }
   }
 
-  return [...candidates.values()];
+  const result = [...candidates.values()];
+  await setCachedCards(result);
+  return result;
 }
 
 const GENERATION_MAX_CANDIDATES = 80;
@@ -231,9 +234,18 @@ export async function gatherDeckGenerationCandidates(
     }
   }
 
+  const candidateList = [...candidates.values()];
+  // Critical: without this, a generated deck's cards are never cached, so
+  // every future page load depends entirely on a fresh live re-resolution
+  // succeeding perfectly for every card, every time — any provider hiccup
+  // or query-size limit shows up as a permanent "could not be found" error
+  // for real cards that were already found once. Caching them here is what
+  // makes that resolution normally a cache hit instead.
+  await setCachedCards(candidateList);
+
   return {
     targetCard,
-    candidates: [...candidates.values()],
+    candidates: candidateList,
     targetLegalInFormat: legalTargetMatches.length > 0,
   };
 }

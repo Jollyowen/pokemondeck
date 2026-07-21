@@ -31,5 +31,13 @@ export async function resolveDeckCards(
   const cardsById = Object.fromEntries(all.map((c) => [c.id, c]));
   const missingCardIds = ids.filter((id) => !cardsById[id]);
 
+  if (missingCardIds.length > 0) {
+    console.log("resolveDeckCards: some card IDs could not be resolved", {
+      requestedCount: ids.length,
+      missingCount: missingCardIds.length,
+      missingCardIds,
+    });
+  }
+
   return { cardsById, missingCardIds };
 }

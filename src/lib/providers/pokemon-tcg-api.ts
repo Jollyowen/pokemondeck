@@ -289,14 +289,50 @@ export const pokemonTcgApiProvider: CardProvider = {
 
   async getCards(cardIds: string[]): Promise<Card[]> {
     if (cardIds.length === 0) return [];
-    // The provider has no batch-by-id endpoint; an OR query over ids is
-    // the documented way to fetch several specific cards in one call.
-    const query = cardIds.map((id) => `id:${id}`).join(" OR ");
-    const result = await pokemonTcgFetch<RawListResponse<RawCard>>("/cards", {
-      q: query,
-      pageSize: String(Math.min(cardIds.length, 250)),
-    });
-    return result.data.map(normalizeCard);
+
+    // Chunked rather than one large OR query over every ID at once: a
+    // generated deck can easily need 20-40+ distinct IDs resolved in one
+    // call, and a single mega-query is exactly the kind of thing that can
+    // silently drop a subset of clauses under some provider-side limit,
+    // with no error — just fewer results than requested. Smaller batches
+    // are far less likely to hit whatever that limit is.
+    const BATCH_SIZE = 20;
+    const batches: string[][] = [];
+    for (let i = 0; i < cardIds.length; i += BATCH_SIZE) {
+      batches.push(cardIds.slice(i, i + BATCH_SIZE));
+    }
+
+    const results: Card[] = [];
+    for (const batch of batches) {
+      const query = batch.map((id) => `id:${id}`).join(" OR ");
+      const result = await pokemonTcgFetch<RawListResponse<RawCard>>("/cards", {
+        q: query,
+        pageSize: String(batch.length),
+      });
+      results.push(...result.data.map(normalizeCard));
+    }
+
+    // Fallback: if any requested ID didn't come back from its batch (the
+    // exact failure mode this is defending against), retry it individually
+    // via the simpler single-card endpoint before giving up on it.
+    const foundIds = new Set(results.map((c) => c.id));
+    const stillMissing = cardIds.filter((id) => !foundIds.has(id));
+    if (stillMissing.length > 0) {
+      const individualResults = await Promise.all(
+        stillMissing.map(async (id) => {
+          try {
+            return await pokemonTcgApiProvider.getCard(id);
+          } catch {
+            return null;
+          }
+        }),
+      );
+      for (const card of individualResults) {
+        if (card) results.push(card);
+      }
+    }
+
+    return results;
   },
 
   async getSets(): Promise<CardSet[]> {

@@ -113,6 +113,29 @@ describe("computeDeckValidation — valid fixtures", () => {
   });
 });
 
+describe("computeDeckValidation — exact size boundaries (59/60/61)", () => {
+  it("marks a 59-card deck as draft", () => {
+    const { entries, cardsById } = makeSixtyCardValidDeck();
+    const fewerEnergy = entries.map((e) => (e.cardId === "energy-1" ? { ...e, quantity: 51 } : e));
+    const result = computeDeckValidation(fewerEnergy, cardsById, [], "standard");
+    expect(result.status).toBe("draft");
+  });
+
+  it("marks a 60-card deck as valid (format_legal, given no other issues)", () => {
+    const { entries, cardsById } = makeSixtyCardValidDeck();
+    const result = computeDeckValidation(entries, cardsById, [], "standard");
+    expect(result.status).toBe("format_legal");
+  });
+
+  it("marks a 61-card deck as draft, with a TOO_MANY_CARDS error", () => {
+    const { entries, cardsById } = makeSixtyCardValidDeck();
+    const moreEnergy = entries.map((e) => (e.cardId === "energy-1" ? { ...e, quantity: 53 } : e));
+    const result = computeDeckValidation(moreEnergy, cardsById, [], "standard");
+    expect(result.status).toBe("draft");
+    expect(result.issues.some((i) => i.code === "TOO_MANY_CARDS")).toBe(true);
+  });
+});
+
 describe("computeDeckValidation — invalid fixtures", () => {
   it("flags more than 4 copies of a non-energy card", () => {
     const card = makeCard({ id: "c1", name: "Professor's Research", supertype: "Trainer", subtypes: [] });

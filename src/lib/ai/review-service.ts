@@ -11,6 +11,7 @@ import { getDeckReviewProvider } from "@/lib/ai/provider-factory";
 import { verifyReviewResult } from "@/lib/ai/verify-review";
 import { REVIEW_PROMPT_VERSION } from "@/lib/ai/prompt";
 import { collectReferencedCardIds } from "@/lib/ai/collect-referenced-cards";
+import { reportError } from "@/lib/monitoring/report-error";
 import {
   findCachedReview,
   saveReview,
@@ -89,11 +90,7 @@ export async function getOrGenerateReview(deck: Deck, ownerId: string): Promise<
     });
   } catch (error) {
     // Log without owner cookies, secrets, or deck names — just enough to debug.
-    console.error("AI provider call failed:", {
-      provider: env.AI_PROVIDER,
-      deckId: deck.id,
-      message: error instanceof Error ? error.message : "unknown error",
-    });
+    reportError("AI provider call failed", error, { provider: env.AI_PROVIDER, deckId: deck.id });
     if (error instanceof Error && error.name === "AiReviewOutputError") throw error;
     throw new AiProviderError("The AI review service is temporarily unavailable. Please try again shortly.");
   }

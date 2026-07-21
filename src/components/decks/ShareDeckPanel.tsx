@@ -108,6 +108,7 @@ export function ShareDeckPanel({
           <div className="flex flex-wrap items-center gap-2">
             <input
               readOnly
+              aria-label="Shareable deck link"
               value={shareUrl}
               className="min-h-11 flex-1 min-w-[220px] rounded-md border border-neutral-300 px-2 text-sm"
               onFocus={(e) => e.target.select()}
@@ -137,7 +138,11 @@ export function ShareDeckPanel({
         </div>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="text-sm text-red-600" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

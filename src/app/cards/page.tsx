@@ -102,7 +102,7 @@ export default function CardsPage() {
       {status === "loading" && <CardGridSkeleton />}
 
       {status === "error" && (
-        <div className="py-16 text-center text-neutral-600">
+        <div className="py-16 text-center text-neutral-600" role="alert">
           <p className="font-medium">Couldn&apos;t load cards</p>
           <p className="text-sm mt-1">{errorMessage}</p>
         </div>

@@ -3,16 +3,17 @@
 Unofficial Pokémon TCG deck-building tool with AI-assisted deck review. Not
 produced, endorsed or supported by Nintendo, The Pokémon Company or Pokémon.
 
-Build status: **Phase 1 of 8 complete** (project foundation). See
-`pokemon-tcg-deck-builder-build-brief.md` for the full build brief and phase
-plan, and `DECISIONS.md` for implementation notes.
+Build status: **Phase 8 of 8 complete** — all phases from the build brief
+are implemented. See `pokemon-tcg-deck-builder-build-brief.md` for the full
+build brief and phase plan, and `DECISIONS.md` for every deliberate
+implementation decision and deviation made along the way.
 
 ## Stack
 
-Next.js (TypeScript) · React · Tailwind CSS · Supabase Postgres · Zod ·
-Vitest · Playwright
+Next.js (TypeScript, App Router) · React · Tailwind CSS · Supabase Postgres ·
+Zod · Vitest · Playwright · Anthropic/OpenAI (AI review)
 
-## Setup
+## Local setup
 
 1. Install dependencies:
    ```bash
@@ -22,16 +23,34 @@ Vitest · Playwright
    ```bash
    cp .env.example .env.local
    ```
-   Required variables are documented inline in `.env.example`. Missing or
-   invalid values will throw a clear error listing every problem when the
-   server starts — see `src/lib/env.ts`.
-3. Create a Supabase project and run the migrations in `supabase/migrations/`
-   in order (`0001` through `0005`), either via the Supabase CLI
-   (`supabase db push`) or by pasting them into the SQL editor in order.
-4. Get a free Pokémon TCG API key from the developer portal at
-   https://dev.pokemontcg.io and set `POKEMON_TCG_API_KEY`.
-5. Set `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY` if `AI_PROVIDER=openai`) and
-   `AI_MODEL`.
+   Every required variable is documented inline in `.env.example`. A
+   missing or invalid value throws a single, clear error listing every
+   problem when the server starts (see `src/lib/env.ts`) — it will not
+   fail silently or partway through a request.
+3. Create a Supabase project and run **every** migration in
+   `supabase/migrations/` **in order** (`0001` through `0008` as of this
+   writing), either via the Supabase CLI (`supabase db push`) or by
+   pasting each file into the SQL editor one at a time, in numeric order.
+   Skipping one is the single most common source of "column not found" or
+   "row violates row-level security policy" errors — see Troubleshooting
+   below.
+4. Enable **Row Level Security** on every table (`owners`, `decks`,
+   `deck_cards`, `card_cache`, `deck_reviews`), with **no policies added**.
+   The app always talks to Supabase using the service-role key from a
+   server-only context, which bypasses RLS entirely — RLS's job here is
+   purely to lock the public anon-key API path shut, since that key ends
+   up in the browser. Run this once, for all tables at once:
+   ```sql
+   alter table owners enable row level security;
+   alter table decks enable row level security;
+   alter table deck_cards enable row level security;
+   alter table card_cache enable row level security;
+   alter table deck_reviews enable row level security;
+   ```
+5. Get a free Pokémon TCG API key from https://dev.pokemontcg.io and set
+   `POKEMON_TCG_API_KEY`.
+6. Set `AI_PROVIDER` (`anthropic` or `openai`), `AI_MODEL`, and the
+   matching API key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`).
 
 ## Running locally
 
@@ -47,36 +66,191 @@ Visit http://localhost:3000.
 npm run typecheck   # TypeScript
 npm run lint        # ESLint
 npm test            # Vitest unit tests
-npm run test:e2e     # Playwright end-to-end tests (starts a dev server automatically)
+npm run test:e2e    # Playwright end-to-end tests (auto-starts a dev server)
 ```
 
-## Deployment
+Playwright needs its browser binary installed once per machine:
+```bash
+npx playwright install --with-deps chromium
+```
 
-Target: Vercel for the application, Supabase for the database. Set the same
-environment variables from `.env.example` in the Vercel project settings.
-Detailed deployment documentation will be added in Phase 8 (Hardening and
-deployment).
+CI (`.github/workflows/ci.yml`) runs all four on every push and pull
+request to `main`, using placeholder (non-secret) environment values —
+most e2e tests mock API responses at the network level and never reach a
+real Supabase project, Pokémon TCG API, or AI provider.
+
+## Production deployment (Vercel + Supabase)
+
+1. **Push the repository to GitHub** and connect it to a new Vercel
+   project (Vercel auto-detects Next.js — no `vercel.json` needed).
+2. **Set up Supabase** as in steps 3–4 of Local setup above, using a
+   dedicated Supabase project for production.
+3. **Get your Supabase keys**: Project Settings → API Keys.
+   - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
+   - **Publishable** key → `NEXT_PUBLIC_SUPABASE_ANON_KEY` (safe to expose
+     in the browser by design)
+   - **Secret** key → `SUPABASE_SERVICE_ROLE_KEY` (never expose this one —
+     see Troubleshooting for what goes wrong if these two get swapped)
+4. **Add every variable from `.env.example`** to Vercel → Settings →
+   Environment Variables, for all environments (Production/Preview/
+   Development) unless you specifically want them to differ.
+5. Set `NEXT_PUBLIC_APP_URL` to your **stable production URL**
+   (`https://your-project.vercel.app` or a custom domain) — **not** a
+   per-deployment preview URL. This value gets baked into every share link
+   and QR code generated by the app; if it points at a preview URL that
+   later disappears, previously generated share links and QR codes stop
+   resolving.
+6. Redeploy after adding/changing environment variables — they only take
+   effect on the next build, not retroactively.
+7. **Always test against the stable production URL**, not a preview URL.
+   The app's "anonymous owner" identity is a cookie scoped to whatever
+   host you're on; testing from a different preview URL each deploy looks
+   like a brand-new visitor every time, even though your previous decks
+   are sitting safely in the database under the old cookie's identity.
+
+### When a phase adds a new database migration or dependency
+
+Check `DECISIONS.md` for the phase you're deploying — it calls out
+whenever a migration or a `package.json` change was introduced. In
+general:
+- New migration → run it in the Supabase SQL editor before or right after
+  deploying the corresponding code; the app will throw column-not-found
+  errors otherwise.
+- New dependency → make sure both `package.json` **and** `package-lock.json`
+  are committed and pushed, not just the source files that use it (see
+  Troubleshooting — a stale lockfile is a common cause of "module not
+  found" during a Vercel build even when `package.json` looks correct).
 
 ## Project structure
 
 ```
 src/
-  app/            Next.js App Router pages and layout
+  app/              Next.js App Router pages and API routes
   lib/
-    env.ts        Validated environment configuration (single source of truth)
-    supabase/     Server (service role) and browser (anon key) clients
-  types/          Shared TypeScript types (Card, Deck, API)
-  schemas/        Zod request validation schemas
+    env.ts          Validated environment configuration (single source of truth)
+    supabase/       Server (service role) and browser (anon key) clients
+    deck/           Deck domain logic: validation, statistics, sharing, repository
+    ai/             AI review pipeline: prompt, providers, verification, caching
+    providers/      Card data provider adapter (Pokémon TCG API)
+    monitoring/     Central error-reporting hook
+  types/            Shared TypeScript types (Card, Deck, API)
+  schemas/          Zod request validation schemas
+  components/       React components, grouped by feature (cards/, decks/)
 supabase/
-  migrations/     Ordered SQL migrations
+  migrations/       Ordered SQL migrations — run every one, in order
 tests/
-  unit/           Vitest unit tests
-  e2e/            Playwright end-to-end tests
+  unit/             Vitest unit tests (pure logic — no network, no database)
+  e2e/              Playwright end-to-end tests (mocked API responses)
+  fixtures/         Shared fixture data for e2e tests
+  mocks/            Test-environment stand-ins (e.g. server-only no-op)
+.github/workflows/  CI pipeline
 ```
+
+## Testing scope and known limitations
+
+Per the build brief's required test list, most validation, AI-safety, and
+statistics logic is pure and directly unit-tested — including deck-size
+boundaries, copy-limit rules, the AI swap-verification pipeline, share
+token entropy, provider selection, and rejection of malformed AI output.
+
+A few required tests are inherently database-integration tests — "an owner
+cannot read another owner's deck," "revoking sharing invalidates the URL,"
+"deleting a deck invalidates the share URL," "a cached review is reused for
+an unchanged deck" — and are **not** covered by an automated test in this
+repository. Properly verifying these needs either a live Supabase test
+project wired into CI, or extensive mocking of Supabase's chainable query
+builder; the latter is brittle enough (mocking `.from().select().eq()...`
+chains realistically) that it risks testing the mock rather than the
+behaviour. Each of these is nonetheless enforced structurally in the code
+(e.g. every owner-scoped repository function filters `.eq("owner_id",
+ownerId)`; `getSharedDeckByToken` filters `share_enabled = true` and
+`deleted_at is null` on every call, so there's no separate cache to
+invalidate). See `DECISIONS.md` for the specific reasoning per case. If you
+want to close this gap, a Supabase local dev instance (`supabase start`)
+wired into the CI job as a service container is the natural next step.
 
 ## Troubleshooting
 
-- **"Invalid or missing environment variables" on startup** — the error lists
-  every missing/invalid variable. Check `.env.local` against `.env.example`.
-- **Supabase client errors** — confirm migrations have been applied in order
-  and `NEXT_PUBLIC_SUPABASE_URL` / keys match the project you migrated.
+Real issues hit while building and deploying this app, in the order you're
+likely to encounter them:
+
+- **"Invalid or missing environment variables" on startup** — the error
+  lists every missing/invalid variable at once. Check `.env.local` (local)
+  or Vercel's Environment Variables (production) against `.env.example`.
+
+- **`new row violates row-level security policy for table "..."`** —
+  `SUPABASE_SERVICE_ROLE_KEY` is set to the wrong kind of key (most often
+  the *publishable/anon* key by mistake). The service-role/secret key is
+  specifically designed to bypass RLS; if requests are being blocked by
+  RLS, the app isn't actually using it. Double-check Supabase → Settings →
+  API Keys → **Secret keys** (separate from the Publishable key section)
+  and make sure that exact value is what's in
+  `SUPABASE_SERVICE_ROLE_KEY`.
+
+- **`Could not find the '...' column of '...' in the schema cache`** — a
+  migration hasn't been run against this Supabase project yet. Check
+  Table Editor for the table in question and compare its columns against
+  the corresponding `supabase/migrations/000N_*.sql` file; run whichever
+  migration(s) are missing, in order. Do not re-run earlier migrations
+  that already succeeded — they are not written to be idempotent and will
+  error on a second run (e.g. "table already exists").
+
+- **Vercel build fails with `Module not found: Can't resolve '@some/package'`**
+  even though it's in `package.json` — the committed `package-lock.json`
+  predates that dependency, so Vercel's `npm install` treats the lockfile
+  as authoritative and never looks for the new package. Fix: make sure
+  `package-lock.json` is regenerated (a plain local `npm install` does
+  this) and committed alongside `package.json`, not just the source files
+  that import the new package.
+
+- **Vercel build fails with an ESLint error about `<a>` vs `<Link>`** —
+  Next.js's linter requires internal navigation to use `next/link`'s
+  `<Link>` component rather than a plain `<a>` tag, so client-side
+  navigation/prefetching works. Replace the `<a href="/...">` with
+  `<Link href="/...">` (and import `Link` from `"next/link"`).
+
+- **AI review returns `"The AI review response did not match the expected format"`**
+  — check Vercel's function logs around the same timestamp for a line
+  starting `Anthropic response had no tool_use block` or `... failed
+  schema validation` (or the OpenAI equivalents) — these log a preview of
+  what the model actually returned, which is the only way to diagnose this
+  class of failure. Two real causes hit during development: (1) the
+  model's response was truncated because `max_tokens` was too low for a
+  detailed review (raised from 4096 to 8192 in `anthropic.ts`), and (2)
+  giving the model two competing shape instructions at once (a strict tool
+  schema *and* a prose JSON-shape example) caused it to write some fields
+  as freeform text instead of the required structure — fixed by giving
+  Anthropic only the schema-enforced path, with the prose shape
+  description reserved for OpenAI's less strictly-enforced JSON mode. See
+  `DECISIONS.md`, "Post-Phase-7 fix" and "Fix: model returning
+  `strengths` as a string."
+
+- **AI review returns `401 invalid x-api-key`** — the API key value itself
+  is wrong: check for a stray space or line break from copy-pasting, that
+  the field isn't still a placeholder, and that the key is active in the
+  Anthropic/OpenAI console. Generating a fresh key is often faster than
+  debugging a suspect one.
+
+- **AI review returns `Something went wrong on the server: Failed to save AI review`**
+  — the `deck_reviews` table is missing its `owner_id` column, meaning
+  migration `0006` hasn't been run. See the schema-cache error above.
+
+- **Decks seem to disappear after a new deployment, or a QR code doesn't
+  resolve** — almost always a URL mismatch, not a data-loss bug. Decks
+  live in Supabase, completely independent of Vercel deployments. Confirm
+  you're testing against the stable production URL (not a per-deployment
+  preview URL — see Production deployment above), and that
+  `NEXT_PUBLIC_APP_URL` was set to that same stable URL at the time a
+  share link/QR code was generated.
+
+- **Card search pagination seems to skip or repeat cards, especially for
+  common names** — sorting by `name` alone leaves no defined order for
+  cards that share an exact name (there are often dozens of prints of a
+  popular Pokémon). Fixed by adding `id` as a secondary, unique sort key
+  (`orderBy: "name,id"` in `pokemon-tcg-api.ts`) so pagination is
+  deterministic regardless of how many cards share a name.
+
+- **A specific card seems missing from search results entirely** — before
+  assuming a bug, check whether filtering by its **set** directly (not
+  just by name) surfaces it. If it does, the issue is almost certainly the
+  pagination-ordering bug above, not missing provider data.

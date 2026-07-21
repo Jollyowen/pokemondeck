@@ -327,6 +327,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             value={name}
             onChange={(e) => setName(e.target.value)}
             onBlur={handleNameBlur}
+            aria-label="Deck name"
             className="text-2xl font-semibold w-full border-b border-transparent hover:border-neutral-300 focus:border-neutral-500 focus:outline-none"
             maxLength={100}
           />
@@ -348,6 +349,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             value={strategyNotes}
             onChange={(e) => setStrategyNotes(e.target.value)}
             onBlur={handleStrategyNotesBlur}
+            aria-label="Deck strategy notes"
             placeholder={'Extra detail (optional) — e.g. "focused on early Charizard pressure"'}
             className="mt-1 text-sm w-full text-neutral-600 border-b border-transparent hover:border-neutral-300 focus:border-neutral-500 focus:outline-none placeholder:text-neutral-400"
             maxLength={300}
@@ -362,7 +364,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
                 {errorCount} issue{errorCount === 1 ? "" : "s"}
               </span>
             )}
-            <span className="text-xs text-neutral-400">
+            <span className="text-xs text-neutral-400" role="status" aria-live="polite">
               {saveStatus === "saving" && "Saving…"}
               {saveStatus === "saved" && "Saved"}
               {saveStatus === "error" && "Error saving — changes kept locally, will retry on next edit"}
@@ -396,7 +398,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {validation && validation.issues.length > 0 && (
-        <ul className="text-sm space-y-1 rounded-md border border-neutral-200 p-3">
+        <ul className="text-sm space-y-1 rounded-md border border-neutral-200 p-3" role="status" aria-live="polite">
           {validation.issues.map((issue, i) => (
             <li key={i} className={issue.severity === "error" ? "text-red-700" : "text-neutral-600"}>
               {issue.message}

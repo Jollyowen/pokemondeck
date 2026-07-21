@@ -4,6 +4,7 @@ import { getServerEnv } from "@/lib/env";
 import { REVIEW_TASK_INSTRUCTIONS, REVIEW_JSON_SHAPE_INSTRUCTIONS, buildReviewDataBlock } from "@/lib/ai/prompt";
 import { parseAndValidateReviewOutput } from "@/lib/ai/review-schema";
 import { AiReviewOutputError } from "@/lib/ai/errors";
+import { reportError } from "@/lib/monitoring/report-error";
 import type { DeckReviewInput, DeckReviewProvider, DeckReviewResult } from "@/types/deck";
 
 let cachedClient: OpenAI | null = null;
@@ -33,8 +34,8 @@ export const openaiReviewProvider: DeckReviewProvider = {
 
     const text = response.choices[0]?.message?.content;
     if (!text) {
-      console.error("OpenAI response had no message content:", {
-        finishReason: response.choices[0]?.finish_reason,
+      reportError("OpenAI response had no message content", new Error("empty message content"), {
+        finishReason: response.choices[0]?.finish_reason ?? undefined,
       });
       throw new AiReviewOutputError();
     }
@@ -43,7 +44,9 @@ export const openaiReviewProvider: DeckReviewProvider = {
     // doesn't match the required shape, regardless of provider quirks.
     const parsed = parseAndValidateReviewOutput(text);
     if (!parsed) {
-      console.error("OpenAI response failed schema validation. First 1000 chars:", text.slice(0, 1000));
+      reportError("OpenAI response failed schema validation", new Error("schema validation failed"), {
+        rawTextPreview: text.slice(0, 1000),
+      });
       throw new AiReviewOutputError();
     }
 

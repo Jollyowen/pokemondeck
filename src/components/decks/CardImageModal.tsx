@@ -1,15 +1,27 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { Card } from "@/types/card";
 
 export function CardImageModal({ card, onClose }: { card: Card; onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedElement = useRef<Element | null>(null);
+
   useEffect(() => {
+    previouslyFocusedElement.current = document.activeElement;
+    closeButtonRef.current?.focus();
+
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (previouslyFocusedElement.current instanceof HTMLElement) {
+        previouslyFocusedElement.current.focus();
+      }
+    };
   }, [onClose]);
 
   return (
@@ -34,6 +46,7 @@ export function CardImageModal({ card, onClose }: { card: Card; onClose: () => v
           </div>
         )}
         <button
+          ref={closeButtonRef}
           type="button"
           onClick={onClose}
           className="mt-3 min-h-11 w-full rounded-md bg-white text-sm font-medium"

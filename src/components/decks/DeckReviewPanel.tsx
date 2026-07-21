@@ -169,12 +169,18 @@ export function DeckReviewPanel({
       {status === "loading" && <p className="text-sm text-neutral-400">Checking for an existing review…</p>}
 
       {status === "rate_limited" && (
-        <p className="text-sm text-amber-700 bg-amber-50 rounded-md px-3 py-2">{errorMessage}</p>
+        <p className="text-sm text-amber-700 bg-amber-50 rounded-md px-3 py-2" role="alert">
+          {errorMessage}
+        </p>
       )}
-      {status === "error" && <p className="text-sm text-red-600">{errorMessage}</p>}
+      {status === "error" && (
+        <p className="text-sm text-red-600" role="alert">
+          {errorMessage}
+        </p>
+      )}
 
       {isStale && review && (
-        <p className="text-sm text-amber-700 bg-amber-50 rounded-md px-3 py-2">
+        <p className="text-sm text-amber-700 bg-amber-50 rounded-md px-3 py-2" role="status">
           This review was generated before your most recent changes — it may be outdated. Regenerate for an
           up-to-date review.
         </p>

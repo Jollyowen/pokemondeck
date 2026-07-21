@@ -273,7 +273,7 @@ export async function duplicateOwnedDeck(
 }
 
 /** 128 bits of entropy, hex-encoded — never derived from or equal to the deck's own database id. */
-function generateShareToken(): string {
+export function generateShareToken(): string {
   return randomBytes(16).toString("hex");
 }
 

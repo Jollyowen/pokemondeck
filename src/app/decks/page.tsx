@@ -155,7 +155,11 @@ export default function DeckLibraryPage() {
       )}
 
       {status === "loading" && <p className="text-neutral-500">Loading decks…</p>}
-      {status === "error" && <p className="text-red-600">Couldn&apos;t load your decks. Please try again.</p>}
+      {status === "error" && (
+        <p className="text-red-600" role="alert">
+          Couldn&apos;t load your decks. Please try again.
+        </p>
+      )}
 
       {status === "idle" && decks && decks.length === 0 && (
         <div className="py-16 text-center text-neutral-500">
@@ -179,6 +183,7 @@ export default function DeckLibraryPage() {
                 {renamingId === deck.id ? (
                   <input
                     autoFocus
+                    aria-label={`Rename ${deck.name}`}
                     className="min-h-11 w-full rounded-md border border-neutral-300 px-2 text-sm font-medium"
                     value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}

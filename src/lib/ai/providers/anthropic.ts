@@ -4,6 +4,7 @@ import { getServerEnv } from "@/lib/env";
 import { REVIEW_TASK_INSTRUCTIONS, buildReviewDataBlock } from "@/lib/ai/prompt";
 import { parseAndValidateReviewOutput } from "@/lib/ai/review-schema";
 import { AiReviewOutputError } from "@/lib/ai/errors";
+import { reportError } from "@/lib/monitoring/report-error";
 import type { DeckReviewInput, DeckReviewProvider, DeckReviewResult } from "@/types/deck";
 
 // Forcing a tool call is the most reliable way to get schema-shaped JSON
@@ -107,9 +108,9 @@ export const anthropicReviewProvider: DeckReviewProvider = {
 
     const toolUse = response.content.find((block) => block.type === "tool_use");
     if (!toolUse) {
-      console.error("Anthropic response had no tool_use block:", {
-        stopReason: response.stop_reason,
-        contentBlockTypes: response.content.map((b) => b.type),
+      reportError("Anthropic response had no tool_use block", new Error("missing tool_use block"), {
+        stopReason: response.stop_reason ?? undefined,
+        contentBlockTypes: response.content.map((b) => b.type).join(","),
       });
       throw new AiReviewOutputError();
     }
@@ -120,9 +121,10 @@ export const anthropicReviewProvider: DeckReviewProvider = {
     const rawJson = JSON.stringify(toolUse.input);
     const parsed = parseAndValidateReviewOutput(rawJson);
     if (!parsed) {
-      console.error(
-        "Anthropic tool_use input failed schema validation. First 1000 chars:",
-        rawJson.slice(0, 1000),
+      reportError(
+        "Anthropic tool_use input failed schema validation",
+        new Error("schema validation failed"),
+        { rawJsonPreview: rawJson.slice(0, 1000) },
       );
       throw new AiReviewOutputError();
     }

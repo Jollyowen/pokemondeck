@@ -93,6 +93,7 @@ export function DeckReviewPanel({
   onResolvedCards: (cards: Record<string, Card>) => void;
 }) {
   const [review, setReview] = useState<DeckReviewResult | null>(null);
+  const [appliedSwapIndices, setAppliedSwapIndices] = useState<Set<number>>(new Set());
   const [isStale, setIsStale] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "generating" | "error" | "rate_limited">("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -113,6 +114,7 @@ export function DeckReviewPanel({
         } | null;
         if (outcome) {
           setReview(outcome.review.result);
+          setAppliedSwapIndices(new Set());
           setIsStale(outcome.isStale);
           onResolvedCards(outcome.resolvedCards);
         }
@@ -140,6 +142,7 @@ export function DeckReviewPanel({
       }
       const outcome = body as { result: DeckReviewResult; resolvedCards: Record<string, Card> };
       setReview(outcome.result);
+      setAppliedSwapIndices(new Set());
       setIsStale(false);
       onResolvedCards(outcome.resolvedCards);
       setStatus("idle");
@@ -269,10 +272,14 @@ export function DeckReviewPanel({
                     <p className="text-sm text-neutral-600 mt-2">{swap.reason}</p>
                     <button
                       type="button"
-                      onClick={() => onApplySwap(swap.remove, swap.add)}
-                      className="min-h-11 mt-2 px-3 rounded-md border border-neutral-300 text-xs"
+                      disabled={appliedSwapIndices.has(i)}
+                      onClick={() => {
+                        onApplySwap(swap.remove, swap.add);
+                        setAppliedSwapIndices((prev) => new Set(prev).add(i));
+                      }}
+                      className="min-h-11 mt-2 px-3 rounded-md border border-neutral-300 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Apply this swap
+                      {appliedSwapIndices.has(i) ? "Applied ✓" : "Apply this swap"}
                     </button>
                   </li>
                 ))}

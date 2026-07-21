@@ -38,7 +38,7 @@ const serverEnvSchema = z.object({
     .number()
     .int()
     .positive()
-    .default(3),
+    .default(2),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

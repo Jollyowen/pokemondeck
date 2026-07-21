@@ -21,7 +21,7 @@ env:
   AI_MODEL: claude-sonnet-5
   ANTHROPIC_API_KEY: ci-placeholder-anthropic-key
   AI_REVIEW_LIMIT_PER_DAY: "5"
-  AI_DECK_GENERATION_LIMIT_PER_DAY: "3"
+  AI_DECK_GENERATION_LIMIT_PER_DAY: "2"
 
 jobs:
   lint-and-typecheck:

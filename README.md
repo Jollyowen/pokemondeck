@@ -6,7 +6,9 @@ produced, endorsed or supported by Nintendo, The Pokémon Company or Pokémon.
 Build status: **Phase 8 of 8 complete** — all phases from the build brief
 are implemented, plus a post-brief addition: AI-assisted deck generation
 ("AI assist" on the New Deck page — describe a Pokémon and style of play,
-get a verified starting 60-card deck). See
+get a verified starting 60-card deck) via a plan → compile → score → refine
+pipeline with archetype-specific quality checks (see
+`ai-deck-assist-redesign-brief.md` for the full redesign brief). See
 `pokemon-tcg-deck-builder-build-brief.md` for the full build brief and
 phase plan, and `DECISIONS.md` for every deliberate implementation
 decision and deviation made along the way.

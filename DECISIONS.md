@@ -836,3 +836,63 @@ and any ambiguities resolved during implementation.
   direct unit test in this codebase — only the pure functions alongside
   them (`normalizeCard`, `buildSearchQuery`, `extractPrice`) do. Kept that
   existing boundary rather than bolt on fetch-mocking for one method.
+
+## AI Deck Assist redesign — implemented per the approved brief
+
+Full rebuild of the AI deck generation pipeline from single-shot generation
+to plan -> compile -> score -> refine, per the separately-authored and
+user-approved redesign brief. Summary of what changed (see the brief
+itself for the full reasoning behind each decision):
+
+- **Archetype-specific quality profiles** (`archetype-profiles.ts`) —
+  four grounded threshold profiles (aggro/control/mill/other), not a
+  single flat table. Mill in particular needs a genuinely different shape
+  (8-12 Pokémon, 34-42 Trainer, 7-11 Energy) than the other three — a real
+  finding from research, not an assumption, and confirmed by a test that
+  specifically proves the mill and default profiles disagree about the
+  same deck.
+- **Deterministic quality scoring** (`deck-quality.ts`) — 7 hard checks
+  (composition ranges, draw/search minimums, Basic Pokémon minimum,
+  Energy-type-vs-attack-cost coverage) and 4 soft/informational checks
+  (evolution depth, attacker redundancy, retreat-cost coverage, multi-prize
+  balance), all computed from the existing `computeDeckStatistics` engine.
+  Deliberately not `server-only` — it's a pure function, reused unchanged
+  on both the server (during generation/refinement) and the client (live
+  in the deck editor), so quality feedback isn't limited to freshly
+  generated decks.
+- **Two-stage AI pipeline**: a cheap strategy-plan call
+  (`plan-prompt.ts`/`plan-schema.ts`, working from a candidate *pool
+  summary* — counts by role, not full card data, to keep this stage
+  cheap) followed by a compilation call scoped to that plan
+  (`generation-prompt.ts`, reworked to accept an optional `plan` and an
+  optional `refinement` payload rather than improvising a full shape from
+  scratch every time).
+- **One bounded refinement pass**: if the compiled deck fails any hard
+  quality check, exactly one more compilation call runs, given the
+  specific numeric gaps as feedback (e.g. "6 Trainers are draw support;
+  this archetype wants at least 8"). The refined attempt is kept
+  regardless of whether it fully passes afterward — per the approved
+  decision, a deck that still has issues is saved with them shown, never
+  blocked or discarded.
+- **`AI_DECK_GENERATION_LIMIT_PER_DAY` default lowered from 3 to 2** — a
+  single "generate" click is now 2-4 AI calls instead of 1, so the daily
+  budget needed adjusting to reflect the real cost per generation, per the
+  brief's own flag on this tradeoff. Still one rate-limit count per click,
+  not per internal AI call.
+- **Manual composition override (brief section 5b) is not yet built** —
+  the brief was approved in full, but this implementation pass covered the
+  core plan/compile/score/refine pipeline first. The override UI, its
+  validation (sum-to-exactly-60), and its plumbing into the plan prompt
+  and quality-check tolerance are a follow-up, not forgotten.
+- Both provider adapters (`anthropic.ts`, `openai.ts`) now implement
+  `planDeck` alongside `generateDeck`, following the exact same
+  instructions/shape-separation discipline established for every other
+  prompt in this app (a lesson learned the hard way in Phase 7 — see the
+  "strengths as a string" fix above), applied correctly from the start
+  here rather than needing a follow-up fix this time.
+- A real TypeScript closure-narrowing gap was caught and fixed while
+  wiring `generation-service.ts`: a `const` checked non-null earlier in
+  the function doesn't stay narrowed inside a nested closure defined
+  later, even though it can't have been reassigned. Fixed by re-binding
+  to a fresh `const` immediately after the null check, before any closure
+  could reference the original narrowed variable incorrectly.

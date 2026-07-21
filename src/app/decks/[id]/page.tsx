@@ -7,10 +7,12 @@ import { AddCardTile } from "@/components/decks/AddCardTile";
 import { Pagination } from "@/components/cards/Pagination";
 import { DeckCardList } from "@/components/decks/DeckCardList";
 import { DeckStatisticsPanel } from "@/components/decks/DeckStatisticsPanel";
+import { DeckQualityPanel } from "@/components/decks/DeckQualityPanel";
 import { ShareDeckPanel } from "@/components/decks/ShareDeckPanel";
 import { DeckReviewPanel } from "@/components/decks/DeckReviewPanel";
 import { CardImageModal } from "@/components/decks/CardImageModal";
 import { computeDeckStatistics } from "@/lib/deck/statistics";
+import { computeDeckQuality } from "@/lib/ai/deck-quality";
 import { computeEstimatedDeckValue } from "@/lib/deck/deck-value";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { isApiError } from "@/types/api";
@@ -78,6 +80,10 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
   const estimatedValue = useMemo(
     () => computeEstimatedDeckValue(cards, knownCards),
     [cards, knownCards],
+  );
+  const quality = useMemo(
+    () => computeDeckQuality(cards, knownCards, statistics, strategyArchetype || null, format),
+    [cards, knownCards, statistics, strategyArchetype, format],
   );
 
   // Show the AI's explanation once, immediately after landing here from
@@ -504,6 +510,13 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             )}
           </p>
         )}
+      </section>
+
+      <section className="rounded-lg border border-neutral-200 p-4">
+        <h2 className="font-medium mb-3">
+          Deck quality {strategyArchetype ? `(vs. ${strategyArchetype} benchmarks)` : "(vs. general benchmarks)"}
+        </h2>
+        <DeckQualityPanel quality={quality} />
       </section>
 
       <ShareDeckPanel

@@ -410,7 +410,12 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div>
           <h2 className="font-medium mb-2">Add cards</h2>
-          <CardSearchFilters value={searchFilters} onChange={setSearchFilters} sets={sets} />
+          <CardSearchFilters
+            value={searchFilters}
+            onChange={setSearchFilters}
+            sets={sets}
+            showFormatToggle={false}
+          />
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
             {searchStatus === "loading" && <p className="text-sm text-neutral-400 col-span-full">Loading…</p>}
             {searchStatus === "error" && (

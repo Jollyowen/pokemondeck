@@ -41,10 +41,20 @@ export function CardSearchFilters({
   value,
   onChange,
   sets,
+  showFormatToggle = true,
 }: {
   value: CardFilterState;
   onChange: (next: CardFilterState) => void;
   sets: CardSet[];
+  /**
+   * Hide the format toggle in contexts that already have their own format
+   * control elsewhere (e.g. the deck editor, where the deck's own
+   * top-level format toggle already governs legality display for
+   * everything — search results included — so a second, independent
+   * format toggle inside the search filters was dead UI that looked like
+   * it should affect results but never did.
+   */
+  showFormatToggle?: boolean;
 }) {
   function update<K extends keyof CardFilterState>(key: K, next: CardFilterState[K]) {
     onChange({ ...value, [key]: next });
@@ -120,27 +130,29 @@ export function CardSearchFilters({
         ))}
       </select>
 
-      <fieldset className="lg:col-span-6 flex flex-wrap items-center gap-2">
-        <legend className="text-sm font-medium mr-1">Format:</legend>
-        {(["all", "standard", "expanded"] as DeckFormat[]).map((format) => (
-          <button
-            key={format}
-            type="button"
-            onClick={() => update("format", format)}
-            aria-pressed={value.format === format}
-            className={`min-h-11 px-4 rounded-full text-sm border ${
-              value.format === format
-                ? "bg-neutral-900 text-white border-neutral-900"
-                : "border-neutral-300 text-neutral-700"
-            }`}
-          >
-            {format === "all" ? "All formats" : `${format[0]?.toUpperCase() ?? ""}${format.slice(1)}`}
-          </button>
-        ))}
-        <span className="text-xs text-neutral-500">
-          Cards not legal in the selected format stay visible, greyed out.
-        </span>
-      </fieldset>
+      {showFormatToggle && (
+        <fieldset className="lg:col-span-6 flex flex-wrap items-center gap-2">
+          <legend className="text-sm font-medium mr-1">Format:</legend>
+          {(["all", "standard", "expanded"] as DeckFormat[]).map((format) => (
+            <button
+              key={format}
+              type="button"
+              onClick={() => update("format", format)}
+              aria-pressed={value.format === format}
+              className={`min-h-11 px-4 rounded-full text-sm border ${
+                value.format === format
+                  ? "bg-neutral-900 text-white border-neutral-900"
+                  : "border-neutral-300 text-neutral-700"
+              }`}
+            >
+              {format === "all" ? "All formats" : `${format[0]?.toUpperCase() ?? ""}${format.slice(1)}`}
+            </button>
+          ))}
+          <span className="text-xs text-neutral-500">
+            Cards not legal in the selected format stay visible, greyed out.
+          </span>
+        </fieldset>
+      )}
     </div>
   );
 }

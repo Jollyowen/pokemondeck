@@ -1,7 +1,7 @@
 import type { DeckGenerationInput } from "@/types/deck";
 
 /** Bump when instructions or expected output shape change meaningfully. */
-export const GENERATION_PROMPT_VERSION = "1.0.0";
+export const GENERATION_PROMPT_VERSION = "1.1.0";
 
 /**
  * Task instructions only — deliberately does NOT describe the output JSON
@@ -23,7 +23,9 @@ Rules:
 - Aim for exactly 60 total cards (summing every card's count), but never invent extra cards beyond the supplied candidates to reach that number — if the candidate pool genuinely can't support a strong 60-card build around the request, propose the best deck you can from what's available and say so in your explanation.
 - Respect the standard 4-copy-per-name limit; Basic Energy is exempt and can appear in any quantity.
 - Include a reasonable Basic Pokémon foundation, not just the requested card's later evolutions.
+- A deck with zero Energy cards cannot function. If any Energy candidates are present in "candidateCards", your decklist MUST include a meaningful count of them (roughly 12-18 for a 60-card deck) — do not omit Energy just because Pokémon or Trainer candidates feel more limited.
 - Balance Pokémon, Trainer, and Energy counts the way a real competitive-ish decklist would (a common starting point is roughly 12-16 Pokémon, 25-30 Trainer, 15-18 Energy, but adjust for the requested archetype and the specific candidates available).
+- Each candidate card includes a "legalInSelectedFormat" field. Prefer legal cards when they serve the deck equally well. You may still include an illegal candidate if it's genuinely the best or only option for the request (e.g. it's the only printing of the requested Pokémon available) — it will simply be flagged for the deck owner afterward, the same way it would be if they'd added it manually.
 - Every array-typed field in your output must be an actual array — never a string, never markdown, never XML-like tags.
 - "deckName" should be a short, natural deck name (e.g. "Charizard ex Rush").
 - "explanation" should briefly describe the deck's strategy and win condition in plain language, grounded in the actual cards you chose.`;

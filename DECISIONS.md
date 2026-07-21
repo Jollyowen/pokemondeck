@@ -625,3 +625,77 @@ and any ambiguities resolved during implementation.
   surface up front rather than something the user has to dig for, and
   cheap to implement given the AI already has to produce this text as
   part of its structured output.
+
+## Fix: requested Pokémon silently excluded from its own generated deck
+
+- Real user report: asking to generate a deck around Wailord produced a
+  deck with no Wailord in it at all, only 2 unique Pokémon (both
+  duplicates of an unrelated card), 20 Trainers, and zero Energy. The AI's
+  own explanation said plainly that Wailord and Water Energy "were not
+  present in the supplied candidate pool" — this was a real bug in
+  candidate gathering, not the model going off-script.
+- Root cause: `gatherDeckGenerationCandidates`'s `addIfNew` filtered every
+  candidate by format legality before it ever reached the model —
+  including the requested Pokémon itself. If the only catalogue printings
+  of the requested card weren't legal in whatever format was selected,
+  the target got silently dropped from the candidate pool while its
+  name/type were still used to steer the rest of the search (evolution
+  line, same-type support, energy) — producing exactly the "deck built
+  around a Pokémon that isn't in it" symptom reported.
+- Fixed by removing the format-legality filter from candidate gathering
+  entirely for generation. This is also the more consistent design:
+  format legality is non-destructive everywhere else in this app (flagged
+  after the fact, never silently removed — see the format filter on
+  `/cards`, and deck validation's `FORMAT_ILLEGAL` issue), so pre-filtering
+  candidates by format was actually inconsistent with that principle, not
+  just buggy in this one case. `buildVerifiedGeneratedDeck` never checked
+  format legality anyway (by design — see Phase 7 notes), so no change was
+  needed there; an illegal card that ends up in a generated deck now just
+  shows up as a normal `FORMAT_ILLEGAL` validation issue once the deck
+  lands in the editor, exactly like a manually-built deck would.
+- To keep the model leaning toward legal cards where it reasonably can,
+  the prompt now explicitly says to prefer candidates with
+  `legalInSelectedFormat: true` when they serve the deck equally well,
+  while allowing an illegal one when it's genuinely the only or best
+  option (mirroring the same allowance a human deck-builder has).
+- Also strengthened the composition guidance to explicitly forbid a
+  zero-Energy decklist whenever Energy candidates exist, rather than
+  leaving deck composition balance as only a soft "aim for" suggestion —
+  the reported deck's 20-Trainer/0-Energy split suggests composition
+  balance is worth reinforcing regardless of the target-exclusion bug.
+- Added `targetLegalInFormat` to the candidate-gathering result. When the
+  requested Pokémon truly has no legal printing in the chosen format, the
+  deck's one-time explanation banner now says so explicitly up front
+  (rather than leaving the person to puzzle out a `FORMAT_ILLEGAL`
+  validation message on their own), and suggests trying a different
+  format or Pokémon.
+- `GENERATION_PROMPT_VERSION` bumped to `1.1.0` for the instruction
+  changes.
+
+## Follow-up fix: target resolution capped at 10 results, ordered alphabetically not by recency
+
+- User clarified that Wailord *is* legal in both Standard and Expanded —
+  which meant the previous fix (removing the format-legality pre-filter)
+  wasn't the complete explanation for the original bug report, only a
+  genuine but separate correctness improvement.
+- Actual likely cause, found on closer inspection: `findExactNameMatches`
+  (used to resolve the requested Pokémon) only fetched the first 10
+  results, and the underlying search always orders by `"name,id"` —
+  alphabetically by set ID, not by release date. A Pokémon with many
+  printings across TCG history can easily have its most recent (and thus
+  most likely currently-legal) printing sort well past position 10,
+  meaning it may never even be fetched, regardless of any legality
+  filtering downstream.
+- Fixed by fetching up to 100 results specifically for the primary target
+  lookup (the one thing the whole request is grounded in), rather than
+  the default 10 used for the cheaper, non-critical lookups (evolution
+  names, staple Trainer names) elsewhere in the same file.
+- Added lightweight diagnostic logging (plain `console.log`, deliberately
+  *not* routed through `reportError` since this isn't a failure — doing so
+  would misrepresent it as an error incident if a real monitoring provider
+  is ever wired in) recording, per generation request: how many printings
+  of the target were found, how many made it into the candidate pool, and
+  — after the model responds — whether the target actually appears in the
+  final verified deck. This is what should make the *next* report of this
+  shape immediately diagnosable from Vercel's logs, rather than requiring
+  another round of hypothesis-and-guess the way both of these fixes did.

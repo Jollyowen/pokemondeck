@@ -39,10 +39,22 @@ export async function generateDeck(
     throw new GenerationRateLimitError(env.AI_DECK_GENERATION_LIMIT_PER_DAY);
   }
 
-  const { targetCard, candidates } = await gatherDeckGenerationCandidates(input.pokemonName, input.format);
+  const { targetCard, candidates, targetLegalInFormat } = await gatherDeckGenerationCandidates(
+    input.pokemonName,
+    input.format,
+  );
   if (!targetCard) {
     throw new PokemonNotFoundError(input.pokemonName);
   }
+
+  const targetPrintingIds = new Set(candidates.filter((c) => c.name === targetCard.name).map((c) => c.id));
+  console.log("AI deck generation: candidate pool gathered", {
+    pokemonName: input.pokemonName,
+    resolvedTargetName: targetCard.name,
+    targetLegalInFormat,
+    targetPrintingsInPool: targetPrintingIds.size,
+    totalCandidates: candidates.length,
+  });
 
   const candidatesById = Object.fromEntries(candidates.map((c) => [c.id, c]));
   const candidateReviewCards = candidates.map((c) => toDeckReviewCard(c, 0, input.format));
@@ -69,6 +81,14 @@ export async function generateDeck(
 
   const verifiedCards = buildVerifiedGeneratedDeck(raw.cards, candidatesById);
 
+  const targetIncludedInFinalDeck = verifiedCards.some((e) => targetPrintingIds.has(e.cardId));
+  console.log("AI deck generation: final deck built", {
+    pokemonName: input.pokemonName,
+    targetIncludedInFinalDeck,
+    totalCardsInDeck: verifiedCards.reduce((s, e) => s + e.quantity, 0),
+    uniqueCardsInDeck: verifiedCards.length,
+  });
+
   const deckName = raw.deckName.trim() || `${targetCard.name} deck`;
   const created = await createDeck(ownerId, deckName, input.format);
   const updated = await updateOwnedDeck(created.id, ownerId, {
@@ -81,5 +101,10 @@ export async function generateDeck(
 
   const finalDeck: Deck = updated ?? created;
   const result = await validateAndPersistStatus(finalDeck, ownerId);
-  return { ...result, explanation: raw.explanation };
+
+  const explanation = targetLegalInFormat
+    ? raw.explanation
+    : `Note: "${targetCard.name}" has no printing legal in the ${input.format} format, so it (and this deck) may include cards flagged as not legal below — consider a different format if that matters for this deck. ${raw.explanation}`;
+
+  return { ...result, explanation };
 }

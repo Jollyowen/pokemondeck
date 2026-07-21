@@ -18,3 +18,12 @@ export class ReviewRateLimitError extends Error {
     this.name = "ReviewRateLimitError";
   }
 }
+
+export class GenerationRateLimitError extends Error {
+  constructor(public readonly limitPerDay: number) {
+    super(
+      `You've reached the limit of ${limitPerDay} AI deck generations per day. Please try again tomorrow, or build a deck manually.`,
+    );
+    this.name = "GenerationRateLimitError";
+  }
+}

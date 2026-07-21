@@ -533,3 +533,95 @@ and any ambiguities resolved during implementation.
   (`tests/fixtures/deck-fixtures.ts`) added for e2e tests going forward,
   though most existing unit tests still define minimal fixtures inline,
   which remains appropriate for tightly-scoped pure-function tests.
+
+## Fix: dead "Format" toggle inside the deck editor's search pane
+
+- The deck editor rendered two independent format controls at once: the
+  top-right toggle (which actually drives every legality/greyscale check
+  across the whole editor — deck list included) and a second, separate
+  format toggle inside the reused `CardSearchFilters` component (built
+  originally for the standalone `/cards` catalogue page, where it's the
+  only format context that exists). The second one was never wired to
+  anything in the deck editor — `AddCardTile`'s greyscale reads the deck's
+  own top-level `format` state, not the search pane's — so clicking it
+  visibly did nothing, which is exactly what got reported.
+- Fixed by adding an optional `showFormatToggle` prop to
+  `CardSearchFilters` (default `true`), and passing `showFormatToggle=
+  {false}` specifically from the deck editor, where the toggle would
+  otherwise be redundant with — and confusingly disconnected from — the
+  deck's own format control. The standalone `/cards` catalogue page is
+  unaffected and keeps its toggle, since that's the only format control it has.
+
+## Addition: AI deck generation ("AI assist" on New Deck)
+
+- New feature, beyond the brief's 8 phases: generating a full starting
+  deck from a style of play, a specific Pokémon, and optional free-text
+  detail, rather than only reviewing/suggesting swaps on a deck that
+  already exists.
+- Deliberately built as a *separate* pipeline from AI review
+  (`generation-schema.ts`, `generation-prompt.ts`, `verify-generation.ts`,
+  `generation-service.ts`, `generation-repository.ts`), not bolted onto
+  the existing review code, even though the two share patterns
+  (provider-neutral interface, instructions/data separation, schema
+  validation gate, never-trust-the-model verification). Generating a
+  60-card deck from nothing and reviewing/tweaking an existing one are
+  different enough operations — different candidate pool sizes, different
+  output shapes, different rate limits — that forcing them through one
+  interface would have made both harder to reason about.
+- **New migration**: `0009_ai_deck_generations.sql` — a lightweight table
+  existing purely for rate-limit bookkeeping (id, owner_id, created_at),
+  not for caching generated decks. Deliberately not caching by input hash
+  the way reviews are: "generate me a deck" is a creative, one-shot action
+  where getting a different result on a second click with the same inputs
+  is reasonable and possibly desirable, unlike a review of a specific
+  existing deck, where the whole point of caching is that the same deck
+  should get the same answer until it changes.
+- **New env var**: `AI_DECK_GENERATION_LIMIT_PER_DAY`, default 3 —
+  intentionally lower than `AI_REVIEW_LIMIT_PER_DAY`'s default of 5, since
+  generating a full deck is a heavier one-shot operation than reviewing an
+  existing one. Enforced via a dedicated `GenerationRateLimitError`
+  (rather than reusing `ReviewRateLimitError`) specifically so the
+  rate-limit message correctly says "AI deck generations," not "AI
+  reviews" — an easy copy-paste mistake to make and a confusing one for
+  the person hitting it.
+- **Verification is enforcement by construction, not filtering after the
+  fact**: `buildVerifiedGeneratedDeck` processes the model's proposed
+  cards one at a time, capping quantity against the running copy-limit
+  total and the remaining space under 60 as it goes, rather than building
+  the model's full proposed list and then checking/rejecting it
+  wholesale. This means a model that gets quantities slightly wrong
+  produces a deck that's still exactly copy-limit-compliant and never
+  over 60, rather than one that gets rejected outright over a fixable
+  quantity issue. Covered by 11 unit tests, written and passing before any
+  UI was built on top of it — same order of operations as the swap
+  verifier in Phase 7, since this felt like the equivalent highest-stakes
+  correctness surface for this feature.
+- **Explicit design decision: never pad a short result up to 60.** If the
+  model (or the verification pipeline's own trimming) produces fewer than
+  60 cards, the resulting deck simply lands in the editor under 60 cards,
+  shown honestly as a draft — never silently topped up with generic
+  energy or anything else the model didn't actually choose. The existing
+  deck editor (search, evolution-line suggestions, AI review's own swap
+  suggestions) is the intended way to finish it, rather than duplicating a
+  "top-up" mechanic specific to generation.
+- **Candidate pool is broader than the review feature's** (up to 80 cards
+  vs. 30): the target Pokémon and its full evolution line, other Pokémon
+  sharing its type(s) as support/backup attackers, the existing curated
+  staple Trainer lists (draw/search/utility), and matching Basic Energy —
+  all filtered by format legality before being offered to the model, same
+  as review candidates.
+- **Pokémon name resolution** happens before any AI call: the named
+  Pokémon is looked up by exact match against the real catalogue first
+  (preferring a printing legal in the requested format), and generation
+  fails fast with a clear "couldn't find that Pokémon" error if no match
+  exists, rather than asking the AI to build a deck around a card that
+  might not be real. The UI also offers live name suggestions while
+  typing, specifically to reduce how often that error path gets hit from
+  an honest typo.
+- The AI's plain-language explanation of the deck's strategy is shown
+  once, immediately after generation, via a dismissible banner in the
+  deck editor (passed through `sessionStorage`, keyed by deck ID, cleared
+  on read so it never reappears on a later visit) — reasonable context to
+  surface up front rather than something the user has to dig for, and
+  cheap to implement given the AI already has to produce this text as
+  part of its structured output.

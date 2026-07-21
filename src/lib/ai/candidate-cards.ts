@@ -136,3 +136,79 @@ export async function gatherCandidateCards(
 
   return [...candidates.values()];
 }
+
+const GENERATION_MAX_CANDIDATES = 80;
+
+export type GenerationCandidateResult =
+  | { targetCard: Card; candidates: Card[] }
+  | { targetCard: null; candidates: [] };
+
+/**
+ * Resolves the named Pokémon and builds a broad, format-filtered candidate
+ * pool wide enough to construct a full 60-card deck from scratch — the
+ * target's evolution line, other Pokémon sharing its type(s), generic
+ * staple Trainers, and matching Basic Energy. Every candidate is a real
+ * card from the provider; nothing here is invented.
+ *
+ * Returns targetCard: null when the named Pokémon can't be found at all,
+ * so the caller can fail with a clear "couldn't find that Pokémon" error
+ * rather than generating a deck around nothing.
+ */
+export async function gatherDeckGenerationCandidates(
+  pokemonName: string,
+  format: DeckFormat,
+): Promise<GenerationCandidateResult> {
+  const targetMatches = await findExactNameMatches(pokemonName, "Pokémon");
+  const legalTargetMatches = targetMatches.filter((c) => isCardLegalInFormat(c, format));
+  const targetCard = (legalTargetMatches[0] ?? targetMatches[0]) ?? null;
+  if (!targetCard) return { targetCard: null, candidates: [] };
+
+  const candidates = new Map<string, Card>();
+  function addIfNew(card: Card) {
+    if (candidates.size >= GENERATION_MAX_CANDIDATES) return;
+    if (!isCardLegalInFormat(card, format)) return;
+    candidates.set(card.id, card);
+  }
+
+  // The target itself, and every printing found for it.
+  targetMatches.forEach(addIfNew);
+
+  // The target's full evolution line, in both directions.
+  const evolutionNames = getEvolutionLineNames(targetCard);
+  for (const name of evolutionNames) {
+    if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
+    const matches = await findExactNameMatches(name, "Pokémon");
+    matches.slice(0, 3).forEach(addIfNew);
+  }
+
+  // Other Pokémon sharing a type with the target, as support/backup attackers.
+  for (const type of targetCard.types) {
+    if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
+    try {
+      const result = await pokemonTcgApiProvider.searchCards({ supertype: "Pokémon", pokemonType: type, pageSize: 20 });
+      result.cards.filter((c) => c.attacks.length > 0).slice(0, 10).forEach(addIfNew);
+    } catch {
+      // best-effort
+    }
+  }
+
+  // Generic staple Trainers across all roles.
+  for (const name of [...STAPLE_DRAW_TRAINER_NAMES, ...STAPLE_SEARCH_TRAINER_NAMES, ...STAPLE_UTILITY_TRAINER_NAMES]) {
+    if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
+    const matches = await findExactNameMatches(name, "Trainer");
+    matches.slice(0, 1).forEach(addIfNew);
+  }
+
+  // Basic Energy matching the target's type(s).
+  for (const type of targetCard.types) {
+    if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
+    try {
+      const result = await pokemonTcgApiProvider.searchCards({ supertype: "Energy", pokemonType: type, pageSize: 5 });
+      result.cards.filter((c) => c.subtypes.includes("Basic")).slice(0, 1).forEach(addIfNew);
+    } catch {
+      // best-effort
+    }
+  }
+
+  return { targetCard, candidates: [...candidates.values()] };
+}

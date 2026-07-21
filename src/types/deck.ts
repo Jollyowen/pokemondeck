@@ -117,6 +117,24 @@ export interface DeckReviewProvider {
   reviewDeck(input: DeckReviewInput): Promise<DeckReviewResult>;
 }
 
+export type DeckGenerationInput = {
+  format: DeckFormat;
+  strategyArchetype: StrategyArchetype | null;
+  pokemonName: string;
+  strategyNotes: string | null;
+  candidateCards: DeckReviewCard[];
+};
+
+export type DeckGenerationResult = {
+  deckName: string;
+  explanation: string;
+  cards: Array<{ cardId: string; count: number }>;
+};
+
+export interface DeckGenerationProvider {
+  generateDeck(input: DeckGenerationInput): Promise<DeckGenerationResult>;
+}
+
 export type EvolutionStageDistribution = {
   basic: number;
   stage1: number;

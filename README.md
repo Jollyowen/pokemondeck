@@ -4,9 +4,12 @@ Unofficial Pokémon TCG deck-building tool with AI-assisted deck review. Not
 produced, endorsed or supported by Nintendo, The Pokémon Company or Pokémon.
 
 Build status: **Phase 8 of 8 complete** — all phases from the build brief
-are implemented. See `pokemon-tcg-deck-builder-build-brief.md` for the full
-build brief and phase plan, and `DECISIONS.md` for every deliberate
-implementation decision and deviation made along the way.
+are implemented, plus a post-brief addition: AI-assisted deck generation
+("AI assist" on the New Deck page — describe a Pokémon and style of play,
+get a verified starting 60-card deck). See
+`pokemon-tcg-deck-builder-build-brief.md` for the full build brief and
+phase plan, and `DECISIONS.md` for every deliberate implementation
+decision and deviation made along the way.
 
 ## Stack
 
@@ -28,14 +31,17 @@ Zod · Vitest · Playwright · Anthropic/OpenAI (AI review)
    problem when the server starts (see `src/lib/env.ts`) — it will not
    fail silently or partway through a request.
 3. Create a Supabase project and run **every** migration in
-   `supabase/migrations/` **in order** (`0001` through `0008` as of this
+   `supabase/migrations/` **in order** (`0001` through `0009` as of this
    writing), either via the Supabase CLI (`supabase db push`) or by
    pasting each file into the SQL editor one at a time, in numeric order.
    Skipping one is the single most common source of "column not found" or
    "row violates row-level security policy" errors — see Troubleshooting
-   below.
+   below. (`0009` adds the `ai_deck_generations` table used to rate-limit
+   the AI deck generation feature — needed even if you don't plan to use
+   that feature, since its absence will make deck generation fail outright.)
 4. Enable **Row Level Security** on every table (`owners`, `decks`,
-   `deck_cards`, `card_cache`, `deck_reviews`), with **no policies added**.
+   `deck_cards`, `card_cache`, `deck_reviews`, `ai_deck_generations`), with
+   **no policies added**.
    The app always talks to Supabase using the service-role key from a
    server-only context, which bypasses RLS entirely — RLS's job here is
    purely to lock the public anon-key API path shut, since that key ends
@@ -46,6 +52,7 @@ Zod · Vitest · Playwright · Anthropic/OpenAI (AI review)
    alter table deck_cards enable row level security;
    alter table card_cache enable row level security;
    alter table deck_reviews enable row level security;
+   alter table ai_deck_generations enable row level security;
    ```
 5. Get a free Pokémon TCG API key from https://dev.pokemontcg.io and set
    `POKEMON_TCG_API_KEY`.
@@ -234,6 +241,21 @@ likely to encounter them:
 - **AI review returns `Something went wrong on the server: Failed to save AI review`**
   — the `deck_reviews` table is missing its `owner_id` column, meaning
   migration `0006` hasn't been run. See the schema-cache error above.
+
+- **"Couldn't find a Pokémon card named ... in the catalogue" when using
+  AI deck generation** — the AI-assist deck generator only builds around a
+  real, exact-name match from the provider's own catalogue, by design (it
+  never generates a deck around a card it can't verify exists). Use the
+  live name suggestions that appear while typing to pick a confirmed
+  spelling rather than typing one from memory.
+
+- **AI deck generation fails with a rate-limit message even though AI
+  review still works, or vice versa** — the two features have separate
+  daily limits (`AI_REVIEW_LIMIT_PER_DAY` and
+  `AI_DECK_GENERATION_LIMIT_PER_DAY`), deliberately not shared, since
+  generation is a heavier one-shot operation than a review. Check
+  `ai_deck_generations` in Table Editor if you need to confirm usage, or
+  wait for the 24-hour window to roll over.
 
 - **Decks seem to disappear after a new deployment, or a QR code doesn't
   resolve** — almost always a URL mismatch, not a data-loss bug. Decks

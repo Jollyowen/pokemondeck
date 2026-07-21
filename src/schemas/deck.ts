@@ -31,7 +31,15 @@ export const shareDeckSchema = z.object({
   enabled: z.boolean(),
 });
 
+export const generateDeckSchema = z.object({
+  format: deckFormatSchema,
+  strategyArchetype: strategyArchetypeSchema.nullable().optional(),
+  pokemonName: z.string().trim().min(1, "A Pokémon name is required").max(100),
+  strategyNotes: z.string().trim().max(300).nullable().optional(),
+});
+
 export type CreateDeckInput = z.infer<typeof createDeckSchema>;
 export type UpdateDeckInput = z.infer<typeof updateDeckSchema>;
 export type DuplicateDeckInput = z.infer<typeof duplicateDeckSchema>;
 export type ShareDeckInput = z.infer<typeof shareDeckSchema>;
+export type GenerateDeckInput = z.infer<typeof generateDeckSchema>;

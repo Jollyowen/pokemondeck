@@ -44,6 +44,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
   const { id: deckId } = use(params);
 
   const [loadState, setLoadState] = useState<"loading" | "notFound" | "error" | "ready">("loading");
+  const [generationExplanation, setGenerationExplanation] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [strategyNotes, setStrategyNotes] = useState("");
   const [strategyArchetype, setStrategyArchetype] = useState<StrategyArchetype | "">("");
@@ -78,6 +79,17 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
     () => computeEstimatedDeckValue(cards, knownCards),
     [cards, knownCards],
   );
+
+  // Show the AI's explanation once, immediately after landing here from
+  // deck generation — read-and-clear, so it doesn't reappear on a later visit.
+  useEffect(() => {
+    const key = `deck-generation-explanation:${deckId}`;
+    const stored = sessionStorage.getItem(key);
+    if (stored) {
+      setGenerationExplanation(stored);
+      sessionStorage.removeItem(key);
+    }
+  }, [deckId]);
 
   // Load the deck once on mount.
   useEffect(() => {
@@ -321,6 +333,24 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="space-y-4">
+      {generationExplanation && (
+        <div
+          className="flex items-start justify-between gap-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2"
+          role="status"
+        >
+          <p className="text-sm text-neutral-700">
+            <strong>AI-generated starting point:</strong> {generationExplanation}
+          </p>
+          <button
+            type="button"
+            onClick={() => setGenerationExplanation(null)}
+            aria-label="Dismiss"
+            className="min-h-11 px-2 text-neutral-400 shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex-1 min-w-[200px]">
           <input

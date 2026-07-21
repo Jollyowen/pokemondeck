@@ -34,6 +34,11 @@ const serverEnvSchema = z.object({
     .int()
     .positive()
     .default(5),
+  AI_DECK_GENERATION_LIMIT_PER_DAY: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(3),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

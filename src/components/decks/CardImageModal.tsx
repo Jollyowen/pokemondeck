@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { Card } from "@/types/card";
+import { EnergyTypeStack } from "@/components/cards/EnergyTypeIcon";
 
 export function CardImageModal({ card, onClose }: { card: Card; onClose: () => void }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -45,11 +46,24 @@ export function CardImageModal({ card, onClose }: { card: Card; onClose: () => v
             No image
           </div>
         )}
+
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-white/95 px-3 py-2 text-sm">
+          <div className="min-w-0">
+            <p className="font-medium truncate">{card.name}</p>
+            <p className="text-xs text-neutral-500 truncate">Set: {card.setName}</p>
+          </div>
+          {card.types.length > 0 && (
+            <div className="shrink-0">
+              <EnergyTypeStack types={card.types} size={22} />
+            </div>
+          )}
+        </div>
+
         <button
           ref={closeButtonRef}
           type="button"
           onClick={onClose}
-          className="mt-3 min-h-11 w-full rounded-md bg-white text-sm font-medium"
+          className="mt-2 min-h-11 w-full rounded-md bg-white text-sm font-medium"
         >
           Close
         </button>

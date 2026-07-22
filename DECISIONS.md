@@ -1231,3 +1231,54 @@ the first (items 1–2 of 5).
   wasn't, and that's a real gap in how that handover was written up, not
   just a database step the user forgot.
 
+## UI/UX redesign, batch 2: evolution-line grouping, Trainer subtype split, card overlay additions
+
+Second of three staged groups from the five-part UI/UX batch (items 3–4 of 5).
+
+- **Evolution-line grouping and Trainer subtype split are both pure
+  functions** (`src/lib/deck/deck-card-grouping.ts`,
+  `groupPokemonByEvolutionLine` / `groupTrainersByCategory` /
+  `trainerCategory`), written and covered by 14 unit tests before being
+  wired into `DeckCardList` — same discipline as every other
+  correctness-sensitive pure function in this app (the swap verifier,
+  the generation verifier).
+- **Evolution grouping is by card name, not card id.** `evolvesFrom` /
+  `evolvesTo` are names, and grouping needs to work the same whether a
+  deck has one printing of a Pokémon or several — multiple printings of
+  the same name collapse into a single node in the tree rather than each
+  starting its own line. A Stage 1/2 whose earlier stage isn't in the
+  deck at all becomes a root of its own line rather than being dropped,
+  since there's nothing to nest it under.
+- **Trainer subtype split**: reads directly off `card.subtypes`, which
+  the provider already supplies (Item/Supporter/Stadium/Pokémon
+  Tool/ACE SPEC) — no new data needed. ACE SPEC is checked first, ahead
+  of whatever other subtype the card also carries (e.g. an ACE SPEC Item
+  still shows under ACE SPEC, not Item), since the brief calls it out as
+  its own bucket. An "Other" bucket catches anything that doesn't match
+  one of the five named categories, so no Trainer card can silently
+  vanish from the list if a future/unusual subtype string shows up.
+  Empty buckets aren't rendered.
+- **`DeckCardList` refactor**: factored the per-entry row markup
+  (image, add/remove controls, evolution-suggestions disclosure) into a
+  single `DeckCardRow` component reused by the Pokémon tree, every
+  Trainer subcategory, and the Energy list — previously this markup was
+  written once for a single flat list; duplicating it three ways instead
+  of factoring it out would have made the three groupings drift out of
+  sync over time.
+- **Nesting is visual only** (left border + indentation per depth level)
+  — deliberately didn't add a text label like "evolves from X" on each
+  child row, since the indentation and grouping already convey the
+  relationship structurally and a static label risked being more
+  confusing than informative once multiple branches (e.g. Eevee's
+  evolutions) are involved.
+- **Card overlay additions**: `CardImageModal` now shows the card's name,
+  `Set: <setName>`, and its elemental type(s) as the same
+  `EnergyTypeStack` icon used on the deck-library thumbnails, in an info
+  bar below the image — reuses the existing icon component rather than a
+  second implementation. Non-Pokémon cards (Trainer/Energy) simply show
+  no type icons, since `card.types` is empty for them.
+- Verified: `tsc --noEmit` clean, `eslint` clean (0 warnings), 154 unit
+  tests pass (140 previous + 14 new), full production build succeeds.
+- **Not yet done** (final batch): the print-deck feature (simple grouped
+  list page, then a full-art grid across A4 sheets with per-card
+  quantity badges instead of duplicate images).

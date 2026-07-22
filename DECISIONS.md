@@ -1098,3 +1098,36 @@ full reasoning behind each decision:
   all of these now hit the local database instead of a rate-limited live
   API, for free, without any changes to that code's own logic beyond
   swapping which search function it calls.
+
+## Fix: sync script hit the API's rate limit and aborted partway through
+
+- Real failure from the first actual run: succeeded for 5 sets, then a
+  `500` from the provider aborted the entire script, having synced only
+  5 of 174 sets. A `500` rather than a clean `429` made it easy to
+  suspect something else, but checking the API's actual documentation
+  confirmed a real, previously-unaccounted-for constraint: **authenticated
+  requests are capped at 30/minute**. The sync script fired every request
+  back-to-back with zero delay between them — a real gap in the original
+  design, not bad luck.
+- Fixed with three layered changes to `scripts/sync-cards.ts`:
+  1. **Fixed pacing** — a 2.5s delay after every request (~24/minute),
+     comfortably under the documented cap with headroom left for retries
+     without tipping back over it.
+  2. **Retry with exponential backoff** (up to 4 attempts, 2s/4s/8s
+     backoff) for any `PokemonTcgApiError` — absorbs a transient
+     rate-limit blip or momentary server error instead of treating the
+     first failure as fatal.
+  3. **Per-set resilience** — a set that still fails after all retries is
+     logged and skipped, not treated as a reason to abort the other 170+
+     sets. Every upsert is idempotent, so re-running the sync (or letting
+     the next scheduled run happen) naturally picks up anything missed
+     without re-doing or duplicating what already succeeded. The script
+     still exits non-zero if anything was skipped, so the GitHub Actions
+     run correctly shows as failed and prompts a retry — it just doesn't
+     throw away partial progress to do so.
+- **Real tradeoff worth naming**: a full sync now takes roughly 8-12
+  minutes instead of under a minute, deliberately. Reliability over speed
+  — this runs unattended on a schedule, so a slower sync that actually
+  completes is worth far more than a fast one that reliably falls over
+  partway through. GitHub Actions' default 6-hour job timeout leaves huge
+  margin regardless.

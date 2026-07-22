@@ -166,9 +166,11 @@ secret store instead of, say, a checked-in `.env` file.
 feature (or on a fresh Supabase project), the catalogue will show zero
 results until then. Trigger the first sync manually rather than wait for
 the weekly schedule: GitHub → your repo → **Actions** tab → **Sync card
-database** workflow → **Run workflow**. A full sync takes a while (every
-set, every card, in a paginated loop) — check the workflow's logs for
-progress.
+database** workflow → **Run workflow**. A full sync takes roughly 8-12
+minutes — deliberately paced to stay under the Pokémon TCG API's
+30-requests-per-minute limit (a real constraint hit and fixed early on;
+see `DECISIONS.md` if you're curious), not something wrong if it doesn't
+finish instantly. Check the workflow's logs for progress.
 
 ## Project structure
 
@@ -344,3 +346,14 @@ likely to encounter them:
   Next.js server context. Anything that needs the Pokémon TCG API adapter
   from a standalone script (like the sync script) should import from
   `pokemon-tcg-api-core.ts` instead — the same logic, without the guard.
+
+- **The sync workflow fails partway through with a `Pokémon TCG API
+  returned 500`, having only synced a handful of sets** — almost
+  certainly the API's 30-requests-per-minute rate limit, even though it
+  surfaces as a generic `500` rather than a clean `429`. The sync script
+  already paces its requests specifically to avoid this (see
+  `DECISIONS.md`); if it's still happening, either the API's limits have
+  tightened, or something in the script changed to fire requests faster.
+  Simply re-running the workflow is safe either way — every upsert is
+  idempotent, so already-synced sets aren't re-done or duplicated, only
+  whatever didn't finish gets retried.

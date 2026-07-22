@@ -920,3 +920,24 @@ itself for the full reasoning behind each decision):
   (`page.locator("li", { hasText: "Better consistency." })`) rather than
   searching the whole page — so "Trainer A" can only match inside the
   swap section itself, not anywhere else it happens to appear.
+
+## Fix: swap card names weren't wrapped in their own element (root cause, one layer deeper)
+
+- The previous fix scoped the failing test's assertion to the swap's own
+  list item, which correctly exposed a real markup gap rather than fixing
+  a broken test: "Trainer A" and "Trainer B" inside `SwapCardGroup` were
+  rendered as bare text nodes, siblings to the count/sign span (`−4×
+  Trainer A`), never wrapped in an element of their own. There was
+  genuinely no element in the swap section whose exact text content was
+  just the card name — so the original, unscoped test assertion had
+  *always* been matching the deck list's own card entry, never the swap
+  section at all, for both this fix and the one before it.
+- Fixed at the source: wrapped the card name in its own `<span>` in
+  `SwapCardGroup` (`DeckReviewPanel.tsx`). This is a genuine small
+  improvement beyond just fixing the test — a distinct element per piece
+  of text is also cleaner for assistive tech than one blended text node
+  combining a symbol, a count, and a name.
+- Checked the sibling `CardChip` component (used for strengths/issues
+  evidence elsewhere in the same file) for the same issue — it doesn't
+  have it, since its button's only text content is already the card name
+  alone, nothing else concatenated alongside it.

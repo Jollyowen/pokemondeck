@@ -70,7 +70,7 @@ function SwapCardGroup({
                 {sign === "remove" ? "−" : "+"}
                 {ref.count}×
               </span>{" "}
-              {card?.name ?? ref.cardId}
+              <span>{card?.name ?? ref.cardId}</span>
             </span>
           </button>
         );

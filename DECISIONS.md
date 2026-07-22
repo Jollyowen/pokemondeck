@@ -896,3 +896,27 @@ itself for the full reasoning behind each decision):
   later, even though it can't have been reassigned. Fixed by re-binding
   to a fresh `const` immediately after the null check, before any closure
   could reference the original narrowed variable incorrectly.
+
+## Fix: remaining e2e failure was a bad test assertion, not an app bug
+
+- 17 of 18 e2e tests passed in the latest CI run — real progress from the
+  first run. The one remaining failure (`ai-review-flow.spec.ts` — "shows
+  suggested swaps with real card names") turned out to be a flawed
+  assertion, not an app bug: the test's mocked deck has exactly one card,
+  named "Trainer A" — the same name used for the swap's "remove" side. The
+  assertion `getByText("Trainer A", { exact: true })` was therefore
+  trivially satisfied by the deck list's own entry, regardless of whether
+  the swap section had rendered at all. It proved nothing about the thing
+  the test was actually meant to verify.
+- Confirmed this by cross-checking against the *other* test in the same
+  file ("applying a swap can only be actioned once"), which passed and
+  exercises the identical swap structure via the "Apply this swap" button
+  — proof the swap section genuinely does render correctly. The failure
+  was isolated to the text assertion's scoping, not the feature.
+- Fixed by: waiting for the "Apply this swap" button first (a
+  swap-section-specific element, unlike a card name that might coincide
+  with something already on the page) before checking any text, and
+  scoping the name assertions to the swap's own list item
+  (`page.locator("li", { hasText: "Better consistency." })`) rather than
+  searching the whole page — so "Trainer A" can only match inside the
+  swap section itself, not anywhere else it happens to appear.

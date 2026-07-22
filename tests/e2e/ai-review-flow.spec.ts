@@ -50,13 +50,19 @@ test("generating a review shows suggested swaps with real card names and images,
   await page.goto("/decks/deck-1");
   await page.getByRole("button", { name: "Generate review" }).click();
 
+  // Wait for the swap section to have actually rendered before checking
+  // names — the Apply button only exists once suggestedSwaps has loaded.
+  await expect(page.getByRole("button", { name: "Apply this swap" })).toBeVisible();
+
   await expect(page.getByText("deck-card-1")).not.toBeVisible();
   await expect(page.getByText("candidate-1")).not.toBeVisible();
-  // exact: true, since "Trainer A" is also a substring of the swap group's
-  // accessible name ("−4× Trainer A"), which would otherwise ambiguously
-  // match both elements under Playwright's default substring text search.
-  await expect(page.getByText("Trainer A", { exact: true })).toBeVisible();
-  await expect(page.getByText("Trainer B", { exact: true })).toBeVisible();
+
+  // Scoped to the swap's own list item — "Trainer A" is also the deck's
+  // only card, so an unscoped match would trivially pass against the
+  // deck list regardless of whether the swap section rendered at all.
+  const swapItem = page.locator("li", { hasText: "Better consistency." });
+  await expect(swapItem.getByText("Trainer A", { exact: true })).toBeVisible();
+  await expect(swapItem.getByText("Trainer B", { exact: true })).toBeVisible();
 });
 
 test("applying a swap can only be actioned once", async ({ page }) => {

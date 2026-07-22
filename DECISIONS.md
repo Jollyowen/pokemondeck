@@ -1282,3 +1282,52 @@ Second of three staged groups from the five-part UI/UX batch (items 3–4 of 5).
 - **Not yet done** (final batch): the print-deck feature (simple grouped
   list page, then a full-art grid across A4 sheets with per-card
   quantity badges instead of duplicate images).
+
+## UI/UX redesign, batch 3 (final): print deck
+
+Last of three staged groups from the five-part UI/UX batch (item 5 of 5).
+
+- **New route, not a modal**: `/decks/[id]/print` rather than an in-page
+  print overlay — a dedicated route means the browser's native print
+  dialog (`window.print()`) operates on a page containing only the
+  printable content, with the app's header/footer/nav hidden via
+  Tailwind's `print:hidden` rather than needing a separate print
+  stylesheet to fight the app chrome.
+- **Reuses the existing grouping functions** (`groupPokemonByEvolutionLine`,
+  `groupTrainersByCategory`) from batch 2 rather than writing new
+  grouping logic for print — "grouped in the same way as the deck is"
+  is satisfied by construction, not by keeping two groupings in sync by
+  hand. The evolution tree is flattened depth-first (Basic before its
+  evolutions) for the printed list, since nested indentation doesn't
+  carry the same value on a static printed page that it does as an
+  interactive disclosure.
+- **Page 1 list includes quantity**, even though the brief's literal
+  wording ("Name, Energy type, Set title") didn't list it — a decklist
+  without a copy count isn't usable as an actual decklist. Flagging this
+  as a deliberate addition of my own judgment, not a literal reading of
+  the spec.
+- **16 cards per page (4×4 grid)**, per explicit confirmation — closer to
+  real card size than 9, fewer pages to print.
+- **Never duplicates an image for multiple copies**, per the brief: the
+  full-art grid is built from one tile per unique card id (quantity
+  already collapsed by the deck's own `deck_cards` schema), with a
+  `×N` badge overlaid when quantity > 1, rather than repeating the same
+  image N times.
+- **Art grid ordering matches the list page's ordering** (Pokémon →
+  Trainer subcategories in the same fixed order → Energy) so a person
+  cross-referencing the two pages doesn't have to hunt for a card.
+- **`@page { size: A4; margin: 12mm }`** added directly to `globals.css`
+  inside a `@media print` block — the one piece of print styling
+  Tailwind's `print:` variant doesn't reach, since Tailwind utilities
+  style elements, not the page box itself.
+- **Cards with no resolved image are skipped from the art grid** but
+  still appear on the list page with a "Not found in catalogue" note —
+  consistent with how unresolved cards are already surfaced elsewhere in
+  the deck editor, rather than silently vanishing from the printout.
+- Verified: `tsc --noEmit` clean, `eslint` clean (0 warnings), all 154
+  existing unit tests still pass unchanged (no new pure-function logic
+  introduced here worth a dedicated unit test — grouping itself is
+  already covered by batch 2's 14 tests), full production build
+  succeeds, and a dev-server smoke test confirms the route renders
+  without crashing.
+- This closes out all five items of the original UI/UX request.

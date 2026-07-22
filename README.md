@@ -10,7 +10,10 @@ get a verified starting 60-card deck) via a plan → compile → score → refin
 pipeline with archetype-specific quality checks (see
 `ai-deck-assist-redesign-brief.md` for the full redesign brief), and a
 locally-synced card database replacing live-API search entirely (see
-`local-card-database-brief.md`). See
+`local-card-database-brief.md`), and a UI/UX redesign covering searchable
+landing page, card-stack deck thumbnails, evolution-line/Trainer-subtype
+grouping in the deck editor, richer card-image overlays, and a print-deck
+view (list page + full-art A4 sheets). See
 `pokemon-tcg-deck-builder-build-brief.md` for the full build brief and
 phase plan, and `DECISIONS.md` for every deliberate implementation
 decision and deviation made along the way.

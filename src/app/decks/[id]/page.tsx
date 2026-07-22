@@ -469,6 +469,12 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
           >
             Undo
           </button>
+          <Link
+            href={`/decks/${deckId}/print`}
+            className="min-h-11 inline-flex items-center px-3 rounded-md border border-neutral-300 text-sm"
+          >
+            Print deck
+          </Link>
         </div>
       </div>
 

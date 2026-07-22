@@ -20,3 +20,14 @@ body {
   color: var(--foreground);
   background: var(--background);
 }
+
+/* Deck print view (see /decks/[id]/print) — A4, minimal margin so the
+   16-per-page full-art grid has room to breathe. Tailwind's `print:`
+   variant handles hiding on-screen chrome; this covers what Tailwind
+   doesn't reach (the page box itself). */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}

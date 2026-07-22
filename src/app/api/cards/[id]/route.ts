@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api";
-import { getCachedCard, setCachedCards } from "@/lib/cache/card-cache";
+import { getLocalCard, upsertCard } from "@/lib/cards/local-card-repository";
 import { withApiErrorHandling } from "@/lib/api/with-error-handling";
 import type { ApiError } from "@/types/api";
 
@@ -10,11 +10,14 @@ export const GET = withApiErrorHandling(async (
 ) => {
   const { id } = await params;
 
-  const cached = await getCachedCard(id);
-  if (cached && cached.fresh) {
-    return NextResponse.json(cached.card);
+  const local = await getLocalCard(id);
+  if (local) {
+    return NextResponse.json(local);
   }
 
+  // Not in the local mirror yet — likely added to the provider's
+  // catalogue since the last sync run. Live-fetch as a fallback, and
+  // write it back locally so it's a cache hit next time.
   try {
     const card = await pokemonTcgApiProvider.getCard(id);
     if (!card) {
@@ -23,19 +26,14 @@ export const GET = withApiErrorHandling(async (
       };
       return NextResponse.json(body, { status: 404 });
     }
-    await setCachedCards([card]);
+    await upsertCard(card);
     return NextResponse.json(card);
   } catch (error) {
     if (error instanceof PokemonTcgApiError) {
-      // Serve stale cache rather than fail outright, per the requirement
-      // that previously cached records remain visible during an outage.
-      if (cached) {
-        return NextResponse.json({ ...cached.card, _stale: true });
-      }
       const body: ApiError = {
         error: {
           code: "PROVIDER_UNAVAILABLE",
-          message: "The card catalogue is temporarily unavailable and this card has not been cached yet.",
+          message: "This card isn't in the local catalogue yet and the live catalogue is temporarily unavailable.",
         },
       };
       return NextResponse.json(body, { status: 502 });

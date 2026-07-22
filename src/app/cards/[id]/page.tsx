@@ -1,22 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { pokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api";
-import { getCachedCard, setCachedCards } from "@/lib/cache/card-cache";
+import { getLocalCard, upsertCard } from "@/lib/cards/local-card-repository";
 import type { Card } from "@/types/card";
 
-async function loadCard(id: string): Promise<{ card: Card; stale: boolean } | null> {
-  const cached = await getCachedCard(id);
-  if (cached && cached.fresh) return { card: cached.card, stale: false };
+async function loadCard(id: string): Promise<Card | null> {
+  const local = await getLocalCard(id);
+  if (local) return local;
 
+  // Not in the local mirror yet — live-fetch as a fallback and write it
+  // back locally, same pattern as the /api/cards/[id] route.
   try {
     const card = await pokemonTcgApiProvider.getCard(id);
     if (!card) return null;
-    await setCachedCards([card]);
-    return { card, stale: false };
+    await upsertCard(card);
+    return card;
   } catch (error) {
-    if (error instanceof PokemonTcgApiError && cached) {
-      return { card: cached.card, stale: true };
-    }
+    if (error instanceof PokemonTcgApiError) return null;
     throw error;
   }
 }
@@ -27,23 +27,15 @@ export default async function CardDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const result = await loadCard(id);
+  const card = await loadCard(id);
 
-  if (!result) notFound();
-  const { card, stale } = result;
+  if (!card) notFound();
 
   return (
     <div className="space-y-4">
       <Link href="/cards" className="text-sm text-neutral-500 hover:underline">
         ← Back to catalogue
       </Link>
-
-      {stale && (
-        <p className="text-sm text-amber-700 bg-amber-50 rounded-md px-3 py-2">
-          The card catalogue is temporarily unavailable — showing a previously cached
-          version of this card.
-        </p>
-      )}
 
       <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-6">
         <div>

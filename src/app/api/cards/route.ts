@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cardSearchSchema } from "@/schemas/card-search";
-import { pokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api";
-import { setCachedCards, searchCachedCardsByName } from "@/lib/cache/card-cache";
+import { searchLocalCards } from "@/lib/cards/local-card-repository";
 import { withApiErrorHandling } from "@/lib/api/with-error-handling";
 import type { ApiError } from "@/types/api";
 import type { CardSearchResult } from "@/types/card";
@@ -21,42 +20,12 @@ export const GET = withApiErrorHandling(async (request: NextRequest) => {
     return NextResponse.json(body, { status: 400 });
   }
 
-  try {
-    const result = await pokemonTcgApiProvider.searchCards(parsed.data);
-    // Write-through cache so single-card lookups and offline fallback
-    // benefit from every search that runs.
-    await setCachedCards(result.cards);
-    return NextResponse.json(result satisfies CardSearchResult);
-  } catch (error) {
-    if (error instanceof PokemonTcgApiError) {
-      // Degraded fallback: only meaningful when the user searched by name,
-      // since that's the one filter we can approximate against the cache.
-      if (parsed.data.name) {
-        const fallbackCards = await searchCachedCardsByName(
-          parsed.data.name,
-          parsed.data.pageSize,
-        );
-        if (fallbackCards.length > 0) {
-          const degraded: CardSearchResult & { degraded: true } = {
-            cards: fallbackCards,
-            page: 1,
-            pageSize: parsed.data.pageSize,
-            totalCount: fallbackCards.length,
-            degraded: true,
-          };
-          return NextResponse.json(degraded, { status: 200 });
-        }
-      }
-
-      const body: ApiError = {
-        error: {
-          code: "PROVIDER_UNAVAILABLE",
-          message:
-            "The card catalogue is temporarily unavailable and no matching cached results were found. Please try again shortly.",
-        },
-      };
-      return NextResponse.json(body, { status: 502 });
-    }
-    throw error;
-  }
+  // Reads the local database mirror — fast, no external rate limit, and
+  // fuzzy/substring name matching via the trigram index, none of which
+  // the live provider gives us directly. Kept current by a scheduled
+  // sync job (scripts/sync-cards.ts). Right after this feature is first
+  // deployed, the table will be empty until that job's first run —
+  // expected, not a bug; see the README for how to trigger it manually.
+  const result = await searchLocalCards(parsed.data);
+  return NextResponse.json(result satisfies CardSearchResult);
 });

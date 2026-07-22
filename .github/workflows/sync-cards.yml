@@ -1,0 +1,27 @@
+name: Sync card database
+
+on:
+  schedule:
+    # Weekly. New sets release roughly quarterly, so this is generous
+    # enough to catch one within a few days without pointless daily load.
+    - cron: "0 6 * * 1" # 06:00 UTC every Monday
+  # Manual trigger — needed at least once after this feature is first
+  # deployed, since the local tables start empty and nothing else
+  # populates them until a sync actually runs.
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run sync-cards
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          POKEMON_TCG_API_KEY: ${{ secrets.POKEMON_TCG_API_KEY }}

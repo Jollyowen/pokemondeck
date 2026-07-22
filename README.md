@@ -8,7 +8,9 @@ are implemented, plus a post-brief addition: AI-assisted deck generation
 ("AI assist" on the New Deck page — describe a Pokémon and style of play,
 get a verified starting 60-card deck) via a plan → compile → score → refine
 pipeline with archetype-specific quality checks (see
-`ai-deck-assist-redesign-brief.md` for the full redesign brief). See
+`ai-deck-assist-redesign-brief.md` for the full redesign brief), and a
+locally-synced card database replacing live-API search entirely (see
+`local-card-database-brief.md`). See
 `pokemon-tcg-deck-builder-build-brief.md` for the full build brief and
 phase plan, and `DECISIONS.md` for every deliberate implementation
 decision and deviation made along the way.
@@ -33,17 +35,16 @@ Zod · Vitest · Playwright · Anthropic/OpenAI (AI review)
    problem when the server starts (see `src/lib/env.ts`) — it will not
    fail silently or partway through a request.
 3. Create a Supabase project and run **every** migration in
-   `supabase/migrations/` **in order** (`0001` through `0009` as of this
+   `supabase/migrations/` **in order** (`0001` through `0010` as of this
    writing), either via the Supabase CLI (`supabase db push`) or by
    pasting each file into the SQL editor one at a time, in numeric order.
    Skipping one is the single most common source of "column not found" or
    "row violates row-level security policy" errors — see Troubleshooting
-   below. (`0009` adds the `ai_deck_generations` table used to rate-limit
-   the AI deck generation feature — needed even if you don't plan to use
-   that feature, since its absence will make deck generation fail outright.)
+   below. (`0010` adds the local `cards`/`sets` tables that now back all
+   card search, and drops the older `card_cache` table entirely.)
 4. Enable **Row Level Security** on every table (`owners`, `decks`,
-   `deck_cards`, `card_cache`, `deck_reviews`, `ai_deck_generations`), with
-   **no policies added**.
+   `deck_cards`, `deck_reviews`, `ai_deck_generations`, `cards`, `sets`),
+   with **no policies added**.
    The app always talks to Supabase using the service-role key from a
    server-only context, which bypasses RLS entirely — RLS's job here is
    purely to lock the public anon-key API path shut, since that key ends
@@ -52,9 +53,10 @@ Zod · Vitest · Playwright · Anthropic/OpenAI (AI review)
    alter table owners enable row level security;
    alter table decks enable row level security;
    alter table deck_cards enable row level security;
-   alter table card_cache enable row level security;
    alter table deck_reviews enable row level security;
    alter table ai_deck_generations enable row level security;
+   alter table cards enable row level security;
+   alter table sets enable row level security;
    ```
 5. Get a free Pokémon TCG API key from https://dev.pokemontcg.io and set
    `POKEMON_TCG_API_KEY`.
@@ -130,6 +132,44 @@ general:
   Troubleshooting — a stale lockfile is a common cause of "module not
   found" during a Vercel build even when `package.json` looks correct).
 
+## Local card database + sync
+
+Card search, browsing, and AI candidate gathering all read from a local
+mirror of the Pokémon TCG catalogue (`cards` and `sets` tables), not the
+external API directly — fast, no external rate limit, and genuine
+substring/fuzzy name search via a Postgres trigram index that the live
+API alone doesn't give us. This mirror is kept current by a **standalone
+script** (`scripts/sync-cards.ts`, run via `npm run sync-cards`), scheduled
+weekly through `.github/workflows/sync-cards.yml` — deliberately run from
+GitHub Actions rather than as a Vercel API route, since a full catalogue
+sync (every set, every card) is too slow for a typical serverless
+function's execution limit, and GitHub Actions jobs have a much more
+generous time budget by default.
+
+**Setup — three GitHub Actions secrets, separate from Vercel's env vars.**
+GitHub Actions has its own secret store; it can't read Vercel's
+environment variables, so the same values need entering a second time.
+Go to your repo on GitHub → **Settings** (the repo's own settings tab, not
+your account's) → **Secrets and variables** → **Actions** → **New
+repository secret**, and add all three, using the same values already in
+Vercel:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `POKEMON_TCG_API_KEY`
+
+These are encrypted, redacted from workflow logs automatically, and never
+appear in any committed file — this is the whole reason to use GitHub's
+secret store instead of, say, a checked-in `.env` file.
+
+**Important: the local tables start empty.** Nothing populates `cards`/
+`sets` until a sync actually runs — right after first deploying this
+feature (or on a fresh Supabase project), the catalogue will show zero
+results until then. Trigger the first sync manually rather than wait for
+the weekly schedule: GitHub → your repo → **Actions** tab → **Sync card
+database** workflow → **Run workflow**. A full sync takes a while (every
+set, every card, in a paginated loop) — check the workflow's logs for
+progress.
+
 ## Project structure
 
 ```
@@ -139,12 +179,17 @@ src/
     env.ts          Validated environment configuration (single source of truth)
     supabase/       Server (service role) and browser (anon key) clients
     deck/           Deck domain logic: validation, statistics, sharing, repository
-    ai/             AI review pipeline: prompt, providers, verification, caching
-    providers/      Card data provider adapter (Pokémon TCG API)
+    ai/             AI review + generation pipeline: prompts, providers, verification
+    cards/          Local card database: row<->Card mapping, search/lookup/upsert
+    providers/      Pokémon TCG API adapter — pokemon-tcg-api-core.ts (no server-only
+                     guard, used by both the app and the standalone sync script) plus
+                     pokemon-tcg-api.ts (server-only-guarded app singleton)
     monitoring/     Central error-reporting hook
   types/            Shared TypeScript types (Card, Deck, API)
   schemas/          Zod request validation schemas
   components/       React components, grouped by feature (cards/, decks/)
+scripts/
+  sync-cards.ts     Standalone catalogue sync — see "Local card database + sync" above
 supabase/
   migrations/       Ordered SQL migrations — run every one, in order
 tests/
@@ -278,3 +323,24 @@ likely to encounter them:
   assuming a bug, check whether filtering by its **set** directly (not
   just by name) surfaces it. If it does, the issue is almost certainly the
   pagination-ordering bug above, not missing provider data.
+
+- **The card catalogue is completely empty right after deploying** — the
+  local `cards`/`sets` tables start empty; nothing populates them until
+  the sync workflow actually runs at least once. See "Local card database
+  + sync" above — trigger it manually via the Actions tab rather than
+  wait for the weekly schedule.
+
+- **The sync workflow fails with "Missing required environment variable"**
+  — one of the three GitHub Actions secrets (`NEXT_PUBLIC_SUPABASE_URL`,
+  `SUPABASE_SERVICE_ROLE_KEY`, `POKEMON_TCG_API_KEY`) hasn't been added to
+  the repo's own secret store yet. These are separate from Vercel's
+  environment variables — GitHub Actions can't read those — so the same
+  values need entering a second time in GitHub's own Settings → Secrets
+  and variables → Actions.
+
+- **`Error: This module cannot be imported from a Client Component module`
+  when running a script or tool against this codebase** — that's
+  `pokemon-tcg-api.ts`'s `server-only` guard firing, by design, outside a
+  Next.js server context. Anything that needs the Pokémon TCG API adapter
+  from a standalone script (like the sync script) should import from
+  `pokemon-tcg-api-core.ts` instead — the same logic, without the guard.

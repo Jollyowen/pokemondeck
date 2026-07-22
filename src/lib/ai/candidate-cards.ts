@@ -1,10 +1,9 @@
 import "server-only";
 import type { Card, DeckFormat } from "@/types/card";
 import type { DeckCardEntry, DeckStatistics } from "@/types/deck";
-import { pokemonTcgApiProvider } from "@/lib/providers/pokemon-tcg-api";
+import { searchLocalCards } from "@/lib/cards/local-card-repository";
 import { getEvolutionLineNames } from "@/lib/deck/evolution-line";
 import { isCardLegalInFormat } from "@/lib/format-legality";
-import { setCachedCards } from "@/lib/cache/card-cache";
 
 const MAX_CANDIDATES = 30;
 
@@ -24,7 +23,7 @@ async function findExactNameMatches(
   pageSize = 10,
 ): Promise<Card[]> {
   try {
-    const result = await pokemonTcgApiProvider.searchCards({
+    const result = await searchLocalCards({
       name,
       supertype,
       pageSize,
@@ -104,7 +103,7 @@ export async function gatherCandidateCards(
     for (const type of pokemonTypes) {
       if (candidates.size >= MAX_CANDIDATES) break;
       try {
-        const result = await pokemonTcgApiProvider.searchCards({
+        const result = await searchLocalCards({
           supertype: "Energy",
           pokemonType: type,
           pageSize: 5,
@@ -125,7 +124,7 @@ export async function gatherCandidateCards(
   for (const type of pokemonTypes) {
     if (candidates.size >= MAX_CANDIDATES) break;
     try {
-      const result = await pokemonTcgApiProvider.searchCards({
+      const result = await searchLocalCards({
         supertype: "Pokémon",
         pokemonType: type,
         pageSize: 10,
@@ -140,7 +139,6 @@ export async function gatherCandidateCards(
   }
 
   const result = [...candidates.values()];
-  await setCachedCards(result);
   return result;
 }
 
@@ -209,7 +207,7 @@ export async function gatherDeckGenerationCandidates(
   for (const type of targetCard.types) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     try {
-      const result = await pokemonTcgApiProvider.searchCards({ supertype: "Pokémon", pokemonType: type, pageSize: 20 });
+      const result = await searchLocalCards({ supertype: "Pokémon", pokemonType: type, pageSize: 20 });
       result.cards.filter((c) => c.attacks.length > 0).slice(0, 10).forEach(addIfNew);
     } catch {
       // best-effort
@@ -227,7 +225,7 @@ export async function gatherDeckGenerationCandidates(
   for (const type of targetCard.types) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     try {
-      const result = await pokemonTcgApiProvider.searchCards({ supertype: "Energy", pokemonType: type, pageSize: 5 });
+      const result = await searchLocalCards({ supertype: "Energy", pokemonType: type, pageSize: 5 });
       result.cards.filter((c) => c.subtypes.includes("Basic")).slice(0, 1).forEach(addIfNew);
     } catch {
       // best-effort
@@ -235,13 +233,9 @@ export async function gatherDeckGenerationCandidates(
   }
 
   const candidateList = [...candidates.values()];
-  // Critical: without this, a generated deck's cards are never cached, so
-  // every future page load depends entirely on a fresh live re-resolution
-  // succeeding perfectly for every card, every time — any provider hiccup
-  // or query-size limit shows up as a permanent "could not be found" error
-  // for real cards that were already found once. Caching them here is what
-  // makes that resolution normally a cache hit instead.
-  await setCachedCards(candidateList);
+  // No write-through cache needed here anymore — every candidate already
+  // came from the local database mirror (searchLocalCards), not a live
+  // provider call, so there's nothing stale to write back.
 
   return {
     targetCard,

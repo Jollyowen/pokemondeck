@@ -1007,3 +1007,94 @@ itself for the full reasoning behind each decision):
   snapshot, since React state updates aren't reflected until the next
   render — passing the exact new state explicitly sidesteps that
   entirely, rather than working around it with an effect or a ref.
+
+## Local card database + weekly sync (per the approved local-card-database-brief.md)
+
+Full replacement of the "hit the live provider on every search" model
+with a locally-synced mirror of the catalogue, per the separately
+authored and approved brief. Summary — see the brief itself for the
+full reasoning behind each decision:
+
+- **New tables**: `cards` and `sets` (migration `0010`), with typed,
+  indexed columns for everything actually searched/filtered on
+  (name, supertype, types, set, rarity, legalities) and a `details` jsonb
+  column for everything else (attacks, abilities, rules text, price,
+  image URLs — the last of which stay as URL strings, not files, so
+  there was never really a size cost to "keeping" them, contrary to the
+  original framing of that question).
+- **Real fuzzy search, finally**: a `pg_trgm` trigram index on `cards.name`
+  makes `ILIKE '%term%'` genuinely fast — substring matching anywhere in
+  a name, not just the provider's prefix-ish matching. This directly
+  closes the "no fuzzy search" gap that was the whole reason dropdown
+  filters mattered so much for confirming a typed name.
+- **`card_cache` retired entirely**, not kept alongside the new tables —
+  same migration that creates `cards`/`sets` also drops it. It was a
+  reactive, partial cache (only ever populated by whatever had happened
+  to be searched or viewed); keeping it running in parallel with a
+  proactively-synced, comprehensive local mirror would mean two
+  "cached card data" sources with different freshness guarantees, which
+  is exactly the kind of thing that causes confusing bugs later, not a
+  reason to hedge. Every call site that used it
+  (`/api/cards`, `/api/cards/[id]`, `/api/sets`, the card detail page,
+  `resolveDeckCards`, AI candidate gathering) was rewired to the new
+  repository — checked with a full repo-wide grep afterward to confirm
+  zero remaining references before deleting the old module, not just
+  hoped.
+- **Provider module split**: `pokemon-tcg-api.ts` carries `import
+  "server-only"` specifically to stop it from being bundled into
+  client-side JS — a real concern for the app, but it turned out to
+  unconditionally throw when imported from a plain standalone script too
+  (confirmed by actually running the sync script and hitting the error,
+  not assumed), which would have broken the sync script entirely. Fixed
+  by splitting the guard-free, reusable logic (the `createPokemonTcgApiProvider`
+  factory, request/response normalization, types) into
+  `pokemon-tcg-api-core.ts` with no `server-only` guard, while
+  `pokemon-tcg-api.ts` becomes a thin re-export plus the app's own
+  `server-only`-guarded singleton. No behavior change for the app itself
+  — every existing import path still works exactly as before — but the
+  sync script can now import the core factory directly.
+- **Sync runs from GitHub Actions, never a Vercel route**: a full
+  catalogue sync (every set, every card, paginated) is too slow for a
+  typical serverless function's execution limit; GitHub Actions jobs have
+  a far more generous budget by default. `scripts/sync-cards.ts` is a
+  standalone script (`npm run sync-cards`), deliberately NOT reusing
+  `src/lib/supabase/server.ts` or `local-card-repository.ts` directly —
+  both depend on `getServerEnv()`, which validates the app's *entire*
+  environment (every AI key, every other secret), not just the three
+  values the sync script actually needs. It builds its own minimal
+  Supabase client and calls the shared, dependency-free row-mapping
+  functions (`card-row-mapping.ts`) directly instead.
+- **Weekly schedule + manual `workflow_dispatch` trigger.** Weekly, per
+  explicit confirmation — new sets release roughly quarterly, so this is
+  generous without being wasteful. The manual trigger isn't a nice-to-have:
+  the local tables start genuinely empty on first deploy, and nothing
+  else populates them until a sync actually runs — waiting for the
+  schedule would mean up to a week of an empty catalogue otherwise.
+- **Three GitHub Actions secrets needed**, not two — worth flagging
+  clearly since the original brief only named
+  `POKEMON_TCG_API_KEY`/`SUPABASE_SERVICE_ROLE_KEY`.
+  `NEXT_PUBLIC_SUPABASE_URL` is also required (the sync script needs to
+  know which Supabase project to write to) and isn't sensitive on its own,
+  but GitHub Actions has no access to Vercel's env vars regardless, so it
+  still needs entering as a secret (or a plain workflow variable — used a
+  secret here for consistency with the other two rather than mixing
+  conventions).
+- **Name field reverted to real-time (debounced) search, dropdowns stay
+  instant** — per explicit confirmation once the local mirror existed.
+  The entire reason the name field was gated behind an explicit Search
+  press was hitting a slow, rate-limited external API on every keystroke;
+  that reason is gone once search reads from a local, fast database
+  instead. Implemented as a 350ms-debounced auto-search inside
+  `CardSearchFilters` itself (shared by both the catalogue and the deck
+  builder's search pane), with an explicit first-render guard so landing
+  on either page still doesn't fire a search before anyone's typed
+  anything — the "don't search on mount" fix from the previous round of
+  changes stays intact, only the "wait for an explicit click" part of it
+  was reverted.
+- **Genuinely faster AI deck generation as a side effect, not the main
+  goal**: candidate gathering (`gatherCandidateCards`,
+  `gatherDeckGenerationCandidates`) does many searches per request
+  (evolution line lookups, same-type support, staple Trainer lookups) —
+  all of these now hit the local database instead of a rate-limited live
+  API, for free, without any changes to that code's own logic beyond
+  swapping which search function it calls.

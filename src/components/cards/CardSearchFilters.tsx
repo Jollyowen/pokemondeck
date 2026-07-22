@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { CardSet, DeckFormat } from "@/types/card";
+import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 
 export type CardFilterState = {
   name: string;
@@ -47,14 +49,15 @@ export function CardSearchFilters({
   value: CardFilterState;
   onChange: (next: CardFilterState) => void;
   /**
-   * Called when the search should actually run. Filter changes alone
-   * never trigger a search EXCEPT the dropdowns below, which call this
+   * Called when the search should actually run. The dropdowns call this
    * immediately on selection (passing the exact new state directly,
    * rather than relying on `value` having already updated by the time
-   * this runs) — deliberately different from the name field, which only
-   * searches on explicit Enter/Search, since there's no fuzzy matching
-   * and an instant dropdown-driven search is what actually helps confirm
-   * a typed name matches something real.
+   * this runs). The name field calls it too, debounced 350ms after the
+   * last keystroke rather than on every single one — both are safe to
+   * fire automatically now that search reads from the local database
+   * instead of a rate-limited external API. Also fires on explicit
+   * Enter/Search-button submission, for immediate control without
+   * waiting out the debounce.
    */
   onSubmit: (overrideFilters?: CardFilterState) => void;
   sets: CardSet[];
@@ -78,6 +81,23 @@ export function CardSearchFilters({
     onChange(nextState);
     onSubmit(nextState);
   }
+
+  // The name field searches automatically too, now that local search
+  // means there's no external rate limit to protect — but debounced
+  // (350ms after the last keystroke), not on every single keystroke, and
+  // deliberately NOT on initial mount (the isFirstRender guard), so
+  // landing on this page still doesn't fire a search before anyone's
+  // typed anything.
+  const debouncedName = useDebouncedValue(value.name, 350);
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    onSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only re-runs on the debounced name changing, not on every onSubmit/value identity change
+  }, [debouncedName]);
 
   return (
     <form

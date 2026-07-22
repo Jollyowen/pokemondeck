@@ -1,7 +1,7 @@
 import "server-only";
 import type { Card } from "@/types/card";
 import type { DeckCardEntry } from "@/types/deck";
-import { getCachedCards, setCachedCards } from "@/lib/cache/card-cache";
+import { getLocalCards, upsertCard } from "@/lib/cards/local-card-repository";
 import { pokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api";
 
 export async function resolveDeckCards(
@@ -10,24 +10,26 @@ export async function resolveDeckCards(
   const ids = [...new Set(entries.map((e) => e.cardId))];
   if (ids.length === 0) return { cardsById: {}, missingCardIds: [] };
 
-  const cached = await getCachedCards(ids);
-  const cachedIds = new Set(cached.map((c) => c.id));
-  const missingFromCache = ids.filter((id) => !cachedIds.has(id));
+  const local = await getLocalCards(ids);
+  const localIds = new Set(local.map((c) => c.id));
+  const missingLocally = ids.filter((id) => !localIds.has(id));
 
   let fetched: Card[] = [];
-  if (missingFromCache.length > 0) {
+  if (missingLocally.length > 0) {
     try {
-      fetched = await pokemonTcgApiProvider.getCards(missingFromCache);
-      await setCachedCards(fetched);
+      fetched = await pokemonTcgApiProvider.getCards(missingLocally);
+      // Write back so these become local cache hits from here on, rather
+      // than depending on a live fetch succeeding again on every future load.
+      await Promise.all(fetched.map((c) => upsertCard(c)));
     } catch (error) {
       if (!(error instanceof PokemonTcgApiError)) throw error;
-      // Provider unavailable and not in cache: those ids stay missing,
-      // reported to the caller as CARD_NOT_FOUND rather than failing the
-      // whole request, so the deck itself remains viewable/editable.
+      // Provider unavailable and not in the local mirror: those ids stay
+      // missing, reported to the caller as CARD_NOT_FOUND rather than
+      // failing the whole request, so the deck itself remains viewable/editable.
     }
   }
 
-  const all = [...cached, ...fetched];
+  const all = [...local, ...fetched];
   const cardsById = Object.fromEntries(all.map((c) => [c.id, c]));
   const missingCardIds = ids.filter((id) => !cardsById[id]);
 

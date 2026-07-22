@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes } from "crypto";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getLocalCards } from "@/lib/cards/local-card-repository";
 import type { Deck, DeckCardEntry, DeckStatus, StrategyArchetype } from "@/types/deck";
 import type { DeckFormat } from "@/types/card";
 
@@ -14,6 +15,7 @@ type DeckRow = {
   share_token: string | null;
   strategy_archetype: StrategyArchetype | null;
   strategy_notes: string | null;
+  main_pokemon_card_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -37,6 +39,7 @@ function toDeck(row: DeckRow, cards: DeckCardEntry[]): Deck {
     cards,
     strategyArchetype: row.strategy_archetype,
     strategyNotes: row.strategy_notes,
+    mainPokemonCardId: row.main_pokemon_card_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
@@ -105,6 +108,7 @@ export type DeckUpdatePatch = {
   status?: DeckStatus;
   strategyArchetype?: StrategyArchetype | null;
   strategyNotes?: string | null;
+  mainPokemonCardId?: string | null;
 };
 
 /** Returns null if the deck doesn't exist or isn't owned by ownerId. */
@@ -132,6 +136,7 @@ export async function updateOwnedDeck(
   if (patch.status !== undefined) deckPatch.status = patch.status;
   if (patch.strategyArchetype !== undefined) deckPatch.strategy_archetype = patch.strategyArchetype;
   if (patch.strategyNotes !== undefined) deckPatch.strategy_notes = patch.strategyNotes;
+  if (patch.mainPokemonCardId !== undefined) deckPatch.main_pokemon_card_id = patch.mainPokemonCardId;
 
   await supabase.from("decks").update(deckPatch).eq("id", deckId);
 
@@ -163,6 +168,17 @@ export type DeckListItem = {
   status: DeckStatus;
   cardCount: number;
   updatedAt: string;
+  mainPokemonCardId: string | null;
+  /** Small card art URL for the deck's chosen main Pokémon, if it resolved. Null until the user sets one, or if that card no longer resolves. */
+  mainPokemonImageSmall: string | null;
+  /**
+   * Elemental (energy) types present among the deck's Pokémon, ordered by
+   * how many cards carry each type (most-represented first) — drives the
+   * stacked type-icon order on the deck-library card. Not the same thing
+   * as Basic Energy cards; a dual-type Pokémon counts toward both types,
+   * same convention already used by the statistics engine.
+   */
+  energyTypes: string[];
 };
 
 export async function listOwnedDecks(ownerId: string, sortBy: DeckSortBy): Promise<DeckListItem[]> {
@@ -172,7 +188,7 @@ export async function listOwnedDecks(ownerId: string, sortBy: DeckSortBy): Promi
 
   const { data: deckRows } = await supabase
     .from("decks")
-    .select("id, name, format, status, updated_at")
+    .select("id, name, format, status, updated_at, main_pokemon_card_id")
     .eq("owner_id", ownerId)
     .is("deleted_at", null)
     .order(column, { ascending });
@@ -184,28 +200,63 @@ export async function listOwnedDecks(ownerId: string, sortBy: DeckSortBy): Promi
       format: DeckFormat;
       status: DeckStatus;
       updated_at: string;
+      main_pokemon_card_id: string | null;
     }> | null) ?? [];
   if (decks.length === 0) return [];
 
   const ids = decks.map((d) => d.id);
   const { data: cardRows } = await supabase
     .from("deck_cards")
-    .select("deck_id, quantity")
+    .select("deck_id, card_id, quantity")
     .in("deck_id", ids);
 
+  const deckCardRows = (cardRows as Array<{ deck_id: string; card_id: string; quantity: number }> | null) ?? [];
+
   const counts = new Map<string, number>();
-  for (const row of (cardRows as Array<{ deck_id: string; quantity: number }> | null) ?? []) {
+  const cardsByDeck = new Map<string, Array<{ cardId: string; quantity: number }>>();
+  for (const row of deckCardRows) {
     counts.set(row.deck_id, (counts.get(row.deck_id) ?? 0) + row.quantity);
+    const list = cardsByDeck.get(row.deck_id) ?? [];
+    list.push({ cardId: row.card_id, quantity: row.quantity });
+    cardsByDeck.set(row.deck_id, list);
   }
 
-  return decks.map((d) => ({
-    id: d.id,
-    name: d.name,
-    format: d.format,
-    status: d.status,
-    cardCount: counts.get(d.id) ?? 0,
-    updatedAt: d.updated_at,
-  }));
+  // Batch-resolve every referenced card once (main-Pokémon picks plus every
+  // deck card, for the energy-type stack) rather than a query per deck.
+  const uniqueCardIds = Array.from(
+    new Set([...deckCardRows.map((r) => r.card_id), ...decks.map((d) => d.main_pokemon_card_id).filter((id): id is string => Boolean(id))]),
+  );
+  const resolvedCards = await getLocalCards(uniqueCardIds);
+  const cardById = new Map(resolvedCards.map((c) => [c.id, c]));
+
+  return decks.map((d) => {
+    const deckCards = cardsByDeck.get(d.id) ?? [];
+    const typeCounts = new Map<string, number>();
+    for (const entry of deckCards) {
+      const card = cardById.get(entry.cardId);
+      if (!card || card.supertype !== "Pokémon") continue;
+      for (const type of card.types) {
+        typeCounts.set(type, (typeCounts.get(type) ?? 0) + entry.quantity);
+      }
+    }
+    const energyTypes = Array.from(typeCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([type]) => type);
+
+    const mainCard = d.main_pokemon_card_id ? cardById.get(d.main_pokemon_card_id) : undefined;
+
+    return {
+      id: d.id,
+      name: d.name,
+      format: d.format,
+      status: d.status,
+      cardCount: counts.get(d.id) ?? 0,
+      updatedAt: d.updated_at,
+      mainPokemonCardId: d.main_pokemon_card_id,
+      mainPokemonImageSmall: mainCard?.imageSmall ?? null,
+      energyTypes,
+    };
+  });
 }
 
 export async function hasAnyOwnedDecks(ownerId: string): Promise<boolean> {
@@ -268,6 +319,7 @@ export async function duplicateOwnedDeck(
     status: original.status,
     strategyArchetype: original.strategyArchetype,
     strategyNotes: original.strategyNotes,
+    mainPokemonCardId: original.mainPokemonCardId,
   });
   return updated ?? created;
 }
@@ -320,6 +372,7 @@ export type PublicSharedDeck = {
   cards: DeckCardEntry[];
   strategyArchetype: StrategyArchetype | null;
   strategyNotes: string | null;
+  mainPokemonCardId: string | null;
   updatedAt: string;
 };
 
@@ -334,7 +387,7 @@ export async function getSharedDeckByToken(shareToken: string): Promise<PublicSh
 
   const { data: deckRow } = await supabase
     .from("decks")
-    .select("id, name, format, status, strategy_archetype, strategy_notes, updated_at")
+    .select("id, name, format, status, strategy_archetype, strategy_notes, main_pokemon_card_id, updated_at")
     .eq("share_token", shareToken)
     .eq("share_enabled", true)
     .is("deleted_at", null)
@@ -345,6 +398,7 @@ export async function getSharedDeckByToken(shareToken: string): Promise<PublicSh
       status: DeckStatus;
       strategy_archetype: StrategyArchetype | null;
       strategy_notes: string | null;
+      main_pokemon_card_id: string | null;
       updated_at: string;
     }>();
 
@@ -369,6 +423,7 @@ export async function getSharedDeckByToken(shareToken: string): Promise<PublicSh
     cards,
     strategyArchetype: deckRow.strategy_archetype,
     strategyNotes: deckRow.strategy_notes,
+    mainPokemonCardId: deckRow.main_pokemon_card_id,
     updatedAt: deckRow.updated_at,
   };
 }
@@ -394,6 +449,7 @@ export async function copySharedDeckToOwner(
     status: shared.status,
     strategyArchetype: shared.strategyArchetype,
     strategyNotes: shared.strategyNotes,
+    mainPokemonCardId: shared.mainPokemonCardId,
   });
   return updated ?? created;
 }

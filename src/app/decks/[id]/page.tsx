@@ -49,6 +49,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
   const [name, setName] = useState("");
   const [strategyNotes, setStrategyNotes] = useState("");
   const [strategyArchetype, setStrategyArchetype] = useState<StrategyArchetype | "">("");
+  const [mainPokemonCardId, setMainPokemonCardId] = useState<string | null>(null);
   const [format, setFormat] = useState<DeckFormat>("standard");
   const [cards, setCards] = useState<DeckCardEntry[]>([]);
   const [knownCards, setKnownCards] = useState<Record<string, Card>>({});
@@ -117,6 +118,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
         setName(deck.name);
         setStrategyNotes(deck.strategyNotes ?? "");
         setStrategyArchetype(deck.strategyArchetype ?? "");
+        setMainPokemonCardId(deck.mainPokemonCardId ?? null);
         setFormat(deck.format);
         setCards(deck.cards);
         setKnownCards(resolvedCards);
@@ -192,6 +194,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
       nextCards: DeckCardEntry[],
       nextStrategyArchetype: StrategyArchetype | "",
       nextStrategyNotes: string,
+      nextMainPokemonCardId: string | null,
     ) => {
       if (!loadedRef.current) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -207,6 +210,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
               cards: nextCards,
               strategyArchetype: nextStrategyArchetype || null,
               strategyNotes: nextStrategyNotes.trim() || null,
+              mainPokemonCardId: nextMainPokemonCardId,
             }),
           });
           const body = await res.json();
@@ -238,7 +242,12 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
     setCards((prev) => {
       pushUndoSnapshot(prev);
       const next = updater(prev);
-      scheduleSave(name, format, next, strategyArchetype, strategyNotes);
+      // If the deck's chosen main Pokémon was removed entirely, clear the
+      // selection rather than keep pointing at a card no longer in the deck.
+      const nextMainPokemonCardId =
+        mainPokemonCardId && !next.some((e) => e.cardId === mainPokemonCardId) ? null : mainPokemonCardId;
+      if (nextMainPokemonCardId !== mainPokemonCardId) setMainPokemonCardId(nextMainPokemonCardId);
+      scheduleSave(name, format, next, strategyArchetype, strategyNotes, nextMainPokemonCardId);
       return next;
     });
   }
@@ -299,26 +308,32 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
     undoSnapshot.current = null;
     setCanUndo(false);
     setCards(restored);
-    scheduleSave(name, format, restored, strategyArchetype, strategyNotes);
+    scheduleSave(name, format, restored, strategyArchetype, strategyNotes, mainPokemonCardId);
   }
 
   function handleNameBlur() {
-    scheduleSave(name, format, cards, strategyArchetype, strategyNotes);
+    scheduleSave(name, format, cards, strategyArchetype, strategyNotes, mainPokemonCardId);
   }
 
   function handleStrategyNotesBlur() {
-    scheduleSave(name, format, cards, strategyArchetype, strategyNotes);
+    scheduleSave(name, format, cards, strategyArchetype, strategyNotes, mainPokemonCardId);
   }
 
   function handleStrategyArchetypeChange(next: StrategyArchetype | "") {
     setStrategyArchetype(next);
-    scheduleSave(name, format, cards, next, strategyNotes);
+    scheduleSave(name, format, cards, next, strategyNotes, mainPokemonCardId);
   }
 
   function handleFormatChange(nextFormat: DeckFormat) {
     setFormat(nextFormat);
     // Changing format never removes cards — only re-evaluates legality.
-    scheduleSave(name, nextFormat, cards, strategyArchetype, strategyNotes);
+    scheduleSave(name, nextFormat, cards, strategyArchetype, strategyNotes, mainPokemonCardId);
+  }
+
+  function handleMainPokemonChange(next: string) {
+    const nextId = next || null;
+    setMainPokemonCardId(nextId);
+    scheduleSave(name, format, cards, strategyArchetype, strategyNotes, nextId);
   }
 
   if (loadState === "loading") {
@@ -340,6 +355,13 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
 
   const errorCount = validation?.issues.filter((i) => i.severity === "error").length ?? 0;
   const totalCount = cards.reduce((s, e) => s + e.quantity, 0);
+  // Pokémon currently in the deck, for the "main Pokémon" thumbnail picker —
+  // only resolved (known) cards can be offered, since unresolved ones have
+  // no name/set to show in the dropdown yet.
+  const pokemonInDeck = cards
+    .map((e) => knownCards[e.cardId])
+    .filter((c): c is Card => c != null && c.supertype === "Pokémon")
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-4">
@@ -383,6 +405,19 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
               <option value="control">Control / Stall</option>
               <option value="mill">Mill</option>
               <option value="other">Other</option>
+            </select>
+            <select
+              value={mainPokemonCardId ?? ""}
+              onChange={(e) => handleMainPokemonChange(e.target.value)}
+              className="min-h-11 rounded-md border border-neutral-300 px-2 text-sm text-neutral-600"
+              aria-label="Main Pokémon for this deck's thumbnail"
+            >
+              <option value="">Main Pokémon (for thumbnail)</option>
+              {pokemonInDeck.map((card) => (
+                <option key={card.id} value={card.id}>
+                  {card.name} ({card.setName})
+                </option>
+              ))}
             </select>
           </div>
           <input

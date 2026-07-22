@@ -50,6 +50,7 @@ export const PATCH = withApiErrorHandling(
       cards: parsed.data.cards,
       strategyArchetype: parsed.data.strategyArchetype,
       strategyNotes: parsed.data.strategyNotes,
+      mainPokemonCardId: parsed.data.mainPokemonCardId,
     });
     if (!updated) return notFound();
 

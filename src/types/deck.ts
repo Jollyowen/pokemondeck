@@ -21,6 +21,8 @@ export type Deck = {
   cards: DeckCardEntry[];
   strategyArchetype: StrategyArchetype | null;
   strategyNotes: string | null;
+  /** User-specified Pokémon card featured as the deck's thumbnail on the library screen. Not inferred automatically. */
+  mainPokemonCardId: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

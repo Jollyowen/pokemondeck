@@ -1131,3 +1131,68 @@ full reasoning behind each decision:
   completes is worth far more than a fast one that reliably falls over
   partway through. GitHub Actions' default 6-hour job timeout leaves huge
   margin regardless.
+
+## UI/UX redesign, batch 1: card search on landing/decks page + deck stack thumbnails
+
+Requested as a five-part UI/UX batch (functionality was already solid).
+Building in three staged groups per the user's confirmed order: this is
+the first (items 1–2 of 5).
+
+- **Card search on the landing/decks screen**: factored the `/cards`
+  page's entire search/filter/results/pagination block out into a
+  reusable `<CardBrowser />` component, rather than duplicating that
+  state logic. `/cards` itself now just renders it (no behaviour change —
+  confirmed via the existing build/lint/test/typecheck pass). Embedded on
+  the empty-state landing page (`/`) and below the deck list on `/decks`,
+  both per the request that this "can be shown below the list of user
+  decks."
+- **Deck stack thumbnails need a "main card" concept that didn't exist.**
+  Rather than infer one (e.g. highest-quantity Pokémon), explicitly asked
+  and the user wants it user-specified. Added `mainPokemonCardId` to the
+  `Deck` type end to end: migration `0011_decks_main_pokemon_card_id.sql`
+  (plain nullable text column, no FK — same loose-reference convention as
+  `deck_cards.card_id`, since card ids live in the locally-synced `cards`
+  table, not something `decks` has ever referenced directly), repository,
+  Zod schema, the `PATCH /api/decks/:id` route, and a new "Main Pokémon"
+  dropdown in the deck editor (populated from Pokémon currently in the
+  deck, autosaved the same way as every other editor field). Carries
+  across duplicate and shared-deck copy, same pattern as
+  `strategyArchetype`/`strategyNotes`. Auto-clears if that specific card
+  is later removed from the deck, rather than silently pointing at a card
+  no longer present.
+- **`listOwnedDecks` now also resolves, in one batched pass**: the main
+  Pokémon's small card image (for the thumbnail) and an `energyTypes`
+  array — the deck's Pokémon elemental types, ordered by how many cards
+  carry each (most-represented first), for the stacked type-icon order.
+  A dual-type Pokémon counts toward both types, same convention already
+  used by `computeDeckStatistics`. All card lookups for a given deck list
+  page batch through a single `getLocalCards` call (deduplicated ids
+  across every deck being listed) rather than a query per deck.
+- **Deck stack visual**: `DeckStackThumbnail` renders the chosen main
+  card on top with two purely decorative, fixed-offset card-backs behind
+  it (no data, never dynamically pulled in, per the request) to suggest a
+  full stack. Falls back to a plain "No main Pokémon set" placeholder
+  card when nothing's been chosen yet or the deck is empty.
+- **Energy-type icons**: `EnergyTypeIcon`/`EnergyTypeStack` are a
+  deliberately original abstract design (colour + single-letter
+  monogram), not a reproduction of the official TCG energy symbols,
+  which are Nintendo/The Pokémon Company IP — same reasoning already
+  applied elsewhere in this app to avoid third-party IP.
+- **Icon-only deck actions**: Open/Rename/Duplicate/Delete are now inline
+  SVG icon buttons (`DeckActionIcons.tsx`) with both a `title` (mouse
+  hover) and an `aria-label` carrying the full action + deck name (e.g.
+  "Duplicate Charizard EX"), rather than relying on visual icon shape
+  alone for meaning — screen readers and hover tooltips both get the full
+  text, not an abbreviation.
+- **Layout**: switched from a single-column deck list to a responsive
+  card grid (1–4 columns depending on viewport). Deliberately avoided any
+  fixed-height/overflow-hidden container on the name, badges, or date row
+  — text wraps rather than truncates, per the explicit "don't crop any
+  info or cut words off" requirement.
+- Verified: `tsc --noEmit` clean, `eslint` clean (0 warnings), all 140
+  existing unit tests still pass unchanged, and a full production build
+  succeeds.
+- **Not yet done** (next two batches, per the user's confirmed staging):
+  evolution-line grouping and Trainer subtype splitting in the deck
+  editor, the card overlay's Set/energy-type additions, and the print
+  deck feature.

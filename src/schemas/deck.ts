@@ -21,6 +21,7 @@ export const updateDeckSchema = z.object({
   cards: z.array(deckCardEntrySchema).max(60).optional(),
   strategyArchetype: strategyArchetypeSchema.nullable().optional(),
   strategyNotes: z.string().trim().max(300).nullable().optional(),
+  mainPokemonCardId: z.string().trim().min(1).nullable().optional(),
 });
 
 export const duplicateDeckSchema = z.object({

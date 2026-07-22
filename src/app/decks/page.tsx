@@ -5,6 +5,10 @@ import Link from "next/link";
 import { isApiError } from "@/types/api";
 import type { DeckFormat } from "@/types/card";
 import type { DeckStatus } from "@/types/deck";
+import { EnergyTypeStack } from "@/components/cards/EnergyTypeIcon";
+import { DeckStackThumbnail } from "@/components/decks/DeckStackThumbnail";
+import { OpenIcon, RenameIcon, DuplicateIcon, DeleteIcon } from "@/components/decks/DeckActionIcons";
+import { CardBrowser } from "@/components/cards/CardBrowser";
 
 type SortBy = "updated_at" | "name" | "format";
 
@@ -15,6 +19,9 @@ type DeckListItem = {
   status: DeckStatus;
   cardCount: number;
   updatedAt: string;
+  mainPokemonCardId: string | null;
+  mainPokemonImageSmall: string | null;
+  energyTypes: string[];
 };
 
 const STATUS_LABEL: Record<DeckStatus, string> = {
@@ -173,72 +180,89 @@ export default function DeckLibraryPage() {
       )}
 
       {status === "idle" && decks && decks.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {decks.map((deck) => (
-            <li
-              key={deck.id}
-              className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 p-3"
-            >
-              <div className="flex-1 min-w-[180px]">
-                {renamingId === deck.id ? (
-                  <input
-                    autoFocus
-                    aria-label={`Rename ${deck.name}`}
-                    className="min-h-11 w-full rounded-md border border-neutral-300 px-2 text-sm font-medium"
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onBlur={() => handleRenameSubmit(deck.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleRenameSubmit(deck.id);
-                      if (e.key === "Escape") setRenamingId(null);
-                    }}
-                    maxLength={100}
-                  />
-                ) : (
-                  <Link href={`/decks/${deck.id}`} className="font-medium hover:underline">
-                    {deck.name}
-                  </Link>
-                )}
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-                  <span className={`rounded-full px-2 py-0.5 ${STATUS_COLOR[deck.status]}`}>
+            <li key={deck.id} className="flex flex-col rounded-lg border border-neutral-200 p-4">
+              <DeckStackThumbnail imageSmall={deck.mainPokemonImageSmall} deckName={deck.name} />
+
+              <div className="mt-3 min-w-0">
+                <div className="flex items-start gap-1.5">
+                  {deck.energyTypes.length > 0 && (
+                    <div className="pt-0.5 shrink-0">
+                      <EnergyTypeStack types={deck.energyTypes} size={18} />
+                    </div>
+                  )}
+                  {renamingId === deck.id ? (
+                    <input
+                      autoFocus
+                      aria-label={`Rename ${deck.name}`}
+                      className="min-h-11 w-full min-w-0 rounded-md border border-neutral-300 px-2 text-sm font-medium"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => handleRenameSubmit(deck.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleRenameSubmit(deck.id);
+                        if (e.key === "Escape") setRenamingId(null);
+                      }}
+                      maxLength={100}
+                    />
+                  ) : (
+                    <Link href={`/decks/${deck.id}`} className="font-medium hover:underline break-words">
+                      {deck.name}
+                    </Link>
+                  )}
+                </div>
+
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500">
+                  <span className={`rounded-full px-2 py-0.5 whitespace-nowrap ${STATUS_COLOR[deck.status]}`}>
                     {STATUS_LABEL[deck.status]}
                   </span>
-                  <span className="capitalize">{deck.format === "all" ? "All formats" : deck.format}</span>
-                  <span>{deck.cardCount} / 60 cards</span>
-                  <span>Updated {formatDate(deck.updatedAt)}</span>
+                  <span className="capitalize whitespace-nowrap">
+                    {deck.format === "all" ? "All formats" : deck.format}
+                  </span>
+                  <span className="whitespace-nowrap">{deck.cardCount} / 60 cards</span>
                 </div>
+                <div className="mt-1 text-xs text-neutral-400">Updated {formatDate(deck.updatedAt)}</div>
               </div>
 
-              <div className="flex items-center gap-1 flex-wrap">
+              <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center justify-between gap-1">
                 <Link
                   href={`/decks/${deck.id}`}
-                  className="min-h-11 inline-flex items-center px-3 rounded-md border border-neutral-300 text-sm"
+                  title={`Open ${deck.name}`}
+                  aria-label={`Open ${deck.name}`}
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
                 >
-                  Open
+                  <OpenIcon />
                 </Link>
                 <button
                   type="button"
-                  className="min-h-11 px-3 rounded-md border border-neutral-300 text-sm"
+                  title={`Rename ${deck.name}`}
+                  aria-label={`Rename ${deck.name}`}
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
                   onClick={() => {
                     setRenamingId(deck.id);
                     setRenameValue(deck.name);
                   }}
                 >
-                  Rename
+                  <RenameIcon />
                 </button>
                 <button
                   type="button"
-                  className="min-h-11 px-3 rounded-md border border-neutral-300 text-sm"
+                  title={`Duplicate ${deck.name}`}
+                  aria-label={`Duplicate ${deck.name}`}
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
                   onClick={() => handleDuplicate(deck.id)}
                 >
-                  Duplicate
+                  <DuplicateIcon />
                 </button>
                 <button
                   type="button"
-                  className="min-h-11 px-3 rounded-md border border-red-200 text-red-700 text-sm"
+                  title={`Delete ${deck.name}`}
+                  aria-label={`Delete ${deck.name}`}
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-red-200 text-red-700 hover:bg-red-50"
                   onClick={() => handleDelete(deck.id, deck.name)}
                 >
-                  Delete
+                  <DeleteIcon />
                 </button>
               </div>
             </li>
@@ -256,6 +280,12 @@ export default function DeckLibraryPage() {
           >
             Undo
           </button>
+        </div>
+      )}
+
+      {status === "idle" && decks && (
+        <div className="pt-6 border-t border-neutral-200">
+          <CardBrowser heading="Search cards" />
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getOwnerId } from "@/lib/owner";
 import { hasAnyOwnedDecks } from "@/lib/deck/repository";
+import { CardBrowser } from "@/components/cards/CardBrowser";
 
 export default async function HomePage() {
   // Read-only: Next.js doesn't allow setting cookies during a Server
@@ -38,6 +39,10 @@ export default async function HomePage() {
         >
           New deck
         </Link>
+      </div>
+
+      <div className="pt-4 border-t border-neutral-200">
+        <CardBrowser heading="Search cards" />
       </div>
     </div>
   );

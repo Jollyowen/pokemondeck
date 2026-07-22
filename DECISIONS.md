@@ -1196,3 +1196,38 @@ the first (items 1–2 of 5).
   evolution-line grouping and Trainer subtype splitting in the deck
   editor, the card overlay's Set/energy-type additions, and the print
   deck feature.
+
+
+## Fix: unapplied migration made existing decks look wiped, not just missing a column
+
+- Real report right after shipping the UI/UX batch-1 deliverable: "my
+  existing decks are no longer showing." Nothing was actually deleted —
+  `listOwnedDecks` selects `main_pokemon_card_id` explicitly (added for
+  the deck-stack thumbnail feature), and until migration `0011` is
+  actually applied to the live database, that query errors. The bug: the
+  code destructured `{ data: deckRows }` and ignored `error` entirely,
+  so a failed query silently became `[]` — indistinguishable from "this
+  owner genuinely has zero decks," which is exactly what made this look
+  like data loss rather than a pending migration.
+- Fixed in `listOwnedDecks` by checking `error` and throwing (after
+  `reportError` logging) rather than falling through to an empty array —
+  a schema mismatch or any other query failure now surfaces as a real
+  500 with a diagnosable log line, not a deceptively-empty deck library.
+  `getSharedDeckByToken` (same explicit-column-list shape, also touched
+  by migration 0011) gets the same `reportError` logging, but
+  deliberately keeps returning "not found" rather than throwing — it's a
+  public endpoint, so a query failure and a genuinely revoked/missing
+  share token should look identical to the requester either way; only
+  the server log needs to be able to tell them apart.
+- Didn't add a mocked-Supabase unit test for this — same reasoning as
+  the Phase 8 "deliberately not covered by an automated test" note:
+  faking `.from().select().eq()...` chains to simulate a query error
+  would mostly prove the mock was called correctly, not that the real
+  error-surfacing logic works.
+- **Process note for next time**: this should have been called out
+  explicitly as a "run this migration before deploying" step when the
+  batch-1 deliverable was handed over (the way earlier phases in this
+  file do, e.g. Phase 7's `0006_deck_reviews_owner_id.sql` note) — it
+  wasn't, and that's a real gap in how that handover was written up, not
+  just a database step the user forgot.
+

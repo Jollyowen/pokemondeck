@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "crypto";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getLocalCards } from "@/lib/cards/local-card-repository";
+import { reportError } from "@/lib/monitoring/report-error";
 import type { Deck, DeckCardEntry, DeckStatus, StrategyArchetype } from "@/types/deck";
 import type { DeckFormat } from "@/types/card";
 
@@ -186,12 +187,21 @@ export async function listOwnedDecks(ownerId: string, sortBy: DeckSortBy): Promi
   const column = sortBy === "updated_at" ? "updated_at" : sortBy;
   const ascending = sortBy !== "updated_at"; // most-recently-updated first by default; name/format alphabetical
 
-  const { data: deckRows } = await supabase
+  const { data: deckRows, error: deckRowsError } = await supabase
     .from("decks")
     .select("id, name, format, status, updated_at, main_pokemon_card_id")
     .eq("owner_id", ownerId)
     .is("deleted_at", null)
     .order(column, { ascending });
+
+  if (deckRowsError) {
+    // A query error here (e.g. a column the code expects but a migration
+    // that hasn't been applied yet) must never be swallowed into "no
+    // decks" — that's indistinguishable from actual data loss to anyone
+    // looking at the resulting empty list. Fail loudly instead.
+    reportError("Failed to list owned decks", deckRowsError, { ownerId });
+    throw new Error("Failed to load decks from the database.");
+  }
 
   const decks =
     (deckRows as Array<{
@@ -385,7 +395,7 @@ export type PublicSharedDeck = {
 export async function getSharedDeckByToken(shareToken: string): Promise<PublicSharedDeck | null> {
   const supabase = getSupabaseServerClient();
 
-  const { data: deckRow } = await supabase
+  const { data: deckRow, error: deckRowError } = await supabase
     .from("decks")
     .select("id, name, format, status, strategy_archetype, strategy_notes, main_pokemon_card_id, updated_at")
     .eq("share_token", shareToken)
@@ -401,6 +411,14 @@ export async function getSharedDeckByToken(shareToken: string): Promise<PublicSh
       main_pokemon_card_id: string | null;
       updated_at: string;
     }>();
+
+  if (deckRowError) {
+    // Logged for diagnosability, but deliberately still falls through to
+    // the same "not found" response as a genuinely missing/revoked token
+    // — a public endpoint shouldn't distinguish "doesn't exist" from
+    // "the query itself failed" in its response, only in the server log.
+    reportError("Failed to look up shared deck by token", deckRowError);
+  }
 
   if (!deckRow) return null;
 

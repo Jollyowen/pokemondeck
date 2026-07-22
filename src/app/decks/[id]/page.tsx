@@ -14,7 +14,6 @@ import { CardImageModal } from "@/components/decks/CardImageModal";
 import { computeDeckStatistics } from "@/lib/deck/statistics";
 import { computeDeckQuality } from "@/lib/ai/deck-quality";
 import { computeEstimatedDeckValue } from "@/lib/deck/deck-value";
-import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { isApiError } from "@/types/api";
 import type { Card, CardSearchResult, DeckFormat, CardSet } from "@/types/card";
 import type { Deck, DeckCardEntry, DeckValidationResult, StrategyArchetype } from "@/types/deck";
@@ -60,10 +59,10 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
 
   const [sets, setSets] = useState<CardSet[]>([]);
   const [searchFilters, setSearchFilters] = useState<CardFilterState>(DEFAULT_FILTERS);
+  const [activeSearch, setActiveSearch] = useState<CardFilterState | null>(null);
   const [searchPage, setSearchPage] = useState(1);
   const [searchResults, setSearchResults] = useState<CardSearchResult | null>(null);
-  const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "error">("idle");
-  const debouncedSearchName = useDebouncedValue(searchFilters.name, 350);
+  const [searchStatus, setSearchStatus] = useState<"not_searched" | "idle" | "loading" | "error">("not_searched");
 
   const undoSnapshot = useRef<DeckCardEntry[] | null>(null);
   const [canUndo, setCanUndo] = useState(false);
@@ -143,20 +142,20 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
       .catch(() => {});
   }, []);
 
-  // Reset to page 1 whenever a filter actually changes.
-  useEffect(() => {
-    setSearchPage(1);
-  }, [debouncedSearchName, searchFilters.supertype, searchFilters.pokemonType, searchFilters.setId, searchFilters.rarity]);
-
   // Search the catalogue while the deck stays visible alongside it.
+  // Nothing fetches until the person actually submits — no more silently
+  // browsing the whole catalogue the moment the deck editor opens, and no
+  // more firing a fresh request on every keystroke.
   useEffect(() => {
+    if (!activeSearch) return;
+
     setSearchStatus("loading");
     const params = new URLSearchParams({ page: String(searchPage), pageSize: "12" });
-    if (debouncedSearchName) params.set("name", debouncedSearchName);
-    if (searchFilters.supertype) params.set("supertype", searchFilters.supertype);
-    if (searchFilters.pokemonType) params.set("pokemonType", searchFilters.pokemonType);
-    if (searchFilters.setId) params.set("setId", searchFilters.setId);
-    if (searchFilters.rarity) params.set("rarity", searchFilters.rarity);
+    if (activeSearch.name) params.set("name", activeSearch.name);
+    if (activeSearch.supertype) params.set("supertype", activeSearch.supertype);
+    if (activeSearch.pokemonType) params.set("pokemonType", activeSearch.pokemonType);
+    if (activeSearch.setId) params.set("setId", activeSearch.setId);
+    if (activeSearch.rarity) params.set("rarity", activeSearch.rarity);
 
     const controller = new AbortController();
     fetch(`/api/cards?${params.toString()}`, { signal: controller.signal })
@@ -179,7 +178,12 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
         if (!controller.signal.aborted) setSearchStatus("error");
       });
     return () => controller.abort();
-  }, [debouncedSearchName, searchFilters.supertype, searchFilters.pokemonType, searchFilters.setId, searchFilters.rarity, searchPage]);
+  }, [activeSearch, searchPage]);
+
+  function handleSearchSubmit(overrideFilters?: CardFilterState) {
+    setSearchPage(1);
+    setActiveSearch(overrideFilters ?? { ...searchFilters });
+  }
 
   const scheduleSave = useCallback(
     (
@@ -449,10 +453,16 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
           <CardSearchFilters
             value={searchFilters}
             onChange={setSearchFilters}
+            onSubmit={handleSearchSubmit}
             sets={sets}
             showFormatToggle={false}
           />
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {searchStatus === "not_searched" && (
+              <p className="text-sm text-neutral-500 col-span-full">
+                Search or filter, then press Search to find cards to add.
+              </p>
+            )}
             {searchStatus === "loading" && <p className="text-sm text-neutral-400 col-span-full">Loading…</p>}
             {searchStatus === "error" && (
               <p className="text-sm text-red-600 col-span-full">Couldn&apos;t load search results.</p>

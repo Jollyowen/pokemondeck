@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { CardSearchFilters, type CardFilterState } from "@/components/cards/CardSearchFilters";
 import { CardGrid, CardGridSkeleton } from "@/components/cards/CardGrid";
 import { Pagination } from "@/components/cards/Pagination";
-import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { isApiError } from "@/types/api";
 import type { Card, CardSet, CardSearchResult } from "@/types/card";
 
@@ -18,22 +17,22 @@ const DEFAULT_FILTERS: CardFilterState = {
 };
 
 export default function CardsPage() {
+  // "Draft" filters are what's bound to the form inputs — they update live
+  // as the person types/selects, but never trigger a search by themselves.
   const [filters, setFilters] = useState<CardFilterState>(DEFAULT_FILTERS);
+  // "Active" search is a snapshot taken only when Search is actually
+  // submitted (button or Enter). Nothing fetches until this is set at
+  // least once — no more silently browsing the entire catalogue the
+  // moment this page loads, before anyone has asked for anything.
+  const [activeSearch, setActiveSearch] = useState<CardFilterState | null>(null);
   const [page, setPage] = useState(1);
   const [sets, setSets] = useState<CardSet[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [pageSize] = useState(24);
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("loading");
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | "not_searched">("not_searched");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [degraded, setDegraded] = useState(false);
-
-  const debouncedName = useDebouncedValue(filters.name, 350);
-
-  // Reset to page 1 whenever a filter actually changes.
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedName, filters.supertype, filters.pokemonType, filters.setId, filters.rarity]);
 
   useEffect(() => {
     fetch("/api/sets")
@@ -47,6 +46,8 @@ export default function CardsPage() {
   }, []);
 
   useEffect(() => {
+    if (!activeSearch) return; // nothing searched yet — no request to make
+
     const controller = new AbortController();
     setStatus("loading");
     setErrorMessage(null);
@@ -55,11 +56,11 @@ export default function CardsPage() {
       page: String(page),
       pageSize: String(pageSize),
     });
-    if (debouncedName) params.set("name", debouncedName);
-    if (filters.supertype) params.set("supertype", filters.supertype);
-    if (filters.pokemonType) params.set("pokemonType", filters.pokemonType);
-    if (filters.setId) params.set("setId", filters.setId);
-    if (filters.rarity) params.set("rarity", filters.rarity);
+    if (activeSearch.name) params.set("name", activeSearch.name);
+    if (activeSearch.supertype) params.set("supertype", activeSearch.supertype);
+    if (activeSearch.pokemonType) params.set("pokemonType", activeSearch.pokemonType);
+    if (activeSearch.setId) params.set("setId", activeSearch.setId);
+    if (activeSearch.rarity) params.set("rarity", activeSearch.rarity);
 
     fetch(`/api/cards?${params.toString()}`, { signal: controller.signal })
       .then(async (res) => {
@@ -77,26 +78,40 @@ export default function CardsPage() {
         setDegraded(Boolean(result.degraded));
         setStatus("idle");
       })
-      .catch((err) => {
+      .catch(() => {
         if (controller.signal.aborted) return;
         setErrorMessage("Something went wrong loading cards. Please try again.");
         setStatus("error");
       });
 
     return () => controller.abort();
-  }, [debouncedName, filters.supertype, filters.pokemonType, filters.setId, filters.rarity, page, pageSize]);
+  }, [activeSearch, page, pageSize]);
+
+  function handleSearchSubmit(overrideFilters?: CardFilterState) {
+    setPage(1);
+    setActiveSearch(overrideFilters ?? { ...filters });
+  }
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Card catalogue</h1>
 
-      <CardSearchFilters value={filters} onChange={setFilters} sets={sets} />
+      <CardSearchFilters value={filters} onChange={setFilters} onSubmit={handleSearchSubmit} sets={sets} />
 
       {degraded && (
         <p className="text-sm text-amber-700 bg-amber-50 rounded-md px-3 py-2">
           The live card catalogue is temporarily unavailable — showing previously cached
           results, which may be incomplete.
         </p>
+      )}
+
+      {status === "not_searched" && (
+        <div className="py-16 text-center text-neutral-500">
+          <p className="font-medium">Search or filter to see cards</p>
+          <p className="text-sm mt-1">
+            Enter a name, choose a filter, or just press Search to browse.
+          </p>
+        </div>
       )}
 
       {status === "loading" && <CardGridSkeleton />}

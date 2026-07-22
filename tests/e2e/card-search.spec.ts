@@ -48,6 +48,7 @@ test("searching shows matching cards", async ({ page }) => {
   );
 
   await page.goto("/cards");
+  await page.getByRole("button", { name: "Search" }).click();
   await expect(page.getByText("Charizard")).toBeVisible();
 });
 
@@ -64,6 +65,7 @@ test("illegal-in-format cards are shown greyed out with a label, not removed", a
   );
 
   await page.goto("/cards");
+  await page.getByRole("button", { name: "Search" }).click();
   // Select the Standard format toggle.
   await page.getByRole("button", { name: "Standard" }).click();
 
@@ -77,6 +79,7 @@ test("shows an empty state when no cards match", async ({ page }) => {
   );
 
   await page.goto("/cards");
+  await page.getByRole("button", { name: "Search" }).click();
   await expect(page.getByText("No cards found")).toBeVisible();
 });
 
@@ -94,6 +97,7 @@ test("shows an error state when the catalogue is unavailable", async ({ page }) 
   );
 
   await page.goto("/cards");
+  await page.getByRole("button", { name: "Search" }).click();
   await expect(page.getByText("Couldn't load cards")).toBeVisible();
 });
 
@@ -113,6 +117,7 @@ test("pagination requests the next page", async ({ page }) => {
   });
 
   await page.goto("/cards");
+  await page.getByRole("button", { name: "Search" }).click();
   await expect(page.getByText("Page 1 of 2")).toBeVisible();
   // exact: true — Next.js's dev-mode floating dev-tools button has an
   // accessible name of "Open Next.js Dev Tools", which contains "Next" as

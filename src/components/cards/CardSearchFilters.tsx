@@ -40,11 +40,23 @@ const inputClass =
 export function CardSearchFilters({
   value,
   onChange,
+  onSubmit,
   sets,
   showFormatToggle = true,
 }: {
   value: CardFilterState;
   onChange: (next: CardFilterState) => void;
+  /**
+   * Called when the search should actually run. Filter changes alone
+   * never trigger a search EXCEPT the dropdowns below, which call this
+   * immediately on selection (passing the exact new state directly,
+   * rather than relying on `value` having already updated by the time
+   * this runs) — deliberately different from the name field, which only
+   * searches on explicit Enter/Search, since there's no fuzzy matching
+   * and an instant dropdown-driven search is what actually helps confirm
+   * a typed name matches something real.
+   */
+  onSubmit: (overrideFilters?: CardFilterState) => void;
   sets: CardSet[];
   /**
    * Hide the format toggle in contexts that already have their own format
@@ -60,8 +72,21 @@ export function CardSearchFilters({
     onChange({ ...value, [key]: next });
   }
 
+  /** Used by the dropdowns: updates draft state and searches immediately with the new value, not a stale one. */
+  function updateAndSearch<K extends keyof CardFilterState>(key: K, next: CardFilterState[K]) {
+    const nextState = { ...value, [key]: next };
+    onChange(nextState);
+    onSubmit(nextState);
+  }
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+    <form
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit();
+      }}
+    >
       <div className="lg:col-span-2">
         <label htmlFor="card-name" className="sr-only">
           Card name
@@ -80,7 +105,7 @@ export function CardSearchFilters({
         aria-label="Card type"
         className={inputClass}
         value={value.supertype}
-        onChange={(e) => update("supertype", e.target.value as CardFilterState["supertype"])}
+        onChange={(e) => updateAndSearch("supertype", e.target.value as CardFilterState["supertype"])}
       >
         <option value="">Any card type</option>
         <option value="Pokémon">Pokémon</option>
@@ -92,7 +117,7 @@ export function CardSearchFilters({
         aria-label="Pokémon energy type"
         className={inputClass}
         value={value.pokemonType}
-        onChange={(e) => update("pokemonType", e.target.value)}
+        onChange={(e) => updateAndSearch("pokemonType", e.target.value)}
       >
         <option value="">Any energy type</option>
         {POKEMON_TYPES.map((t) => (
@@ -106,7 +131,7 @@ export function CardSearchFilters({
         aria-label="Set"
         className={inputClass}
         value={value.setId}
-        onChange={(e) => update("setId", e.target.value)}
+        onChange={(e) => updateAndSearch("setId", e.target.value)}
       >
         <option value="">Any set</option>
         {sets.map((s) => (
@@ -120,7 +145,7 @@ export function CardSearchFilters({
         aria-label="Rarity"
         className={inputClass}
         value={value.rarity}
-        onChange={(e) => update("rarity", e.target.value)}
+        onChange={(e) => updateAndSearch("rarity", e.target.value)}
       >
         <option value="">Any rarity</option>
         {COMMON_RARITIES.map((r) => (
@@ -129,6 +154,13 @@ export function CardSearchFilters({
           </option>
         ))}
       </select>
+
+      <button
+        type="submit"
+        className="min-h-11 rounded-md bg-neutral-900 text-white text-sm font-medium px-4"
+      >
+        Search
+      </button>
 
       {showFormatToggle && (
         <fieldset className="lg:col-span-6 flex flex-wrap items-center gap-2">
@@ -153,6 +185,6 @@ export function CardSearchFilters({
           </span>
         </fieldset>
       )}
-    </div>
+    </form>
   );
 }

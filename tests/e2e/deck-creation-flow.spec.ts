@@ -74,6 +74,7 @@ test("adding a card from search updates the deck list and total count", async ({
   await page.goto("/decks/deck-1");
   await expect(page.getByText("0 / 60 cards")).toBeVisible();
 
+  await page.getByRole("button", { name: "Search" }).click();
   await page.getByRole("button", { name: "Add" }).click();
 
   await expect(page.getByText("1 / 60 cards")).toBeVisible();

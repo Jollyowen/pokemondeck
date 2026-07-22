@@ -941,3 +941,69 @@ itself for the full reasoning behind each decision):
   evidence elsewhere in the same file) for the same issue — it doesn't
   have it, since its button's only text content is already the card name
   alone, nothing else concatenated alongside it.
+
+## Change: search is now explicit, not real-time-on-every-keystroke
+
+- Prompted by a direct question about API usage: confirmed by reading the
+  actual code (not from memory) that both the `/cards` catalogue and the
+  deck builder's "Add cards" pane fired a live request to the *external*
+  Pokémon TCG API (1) immediately on page load with zero filters — i.e.
+  silently browsing the entire catalogue before anyone asked for
+  anything — and (2) on every debounced keystroke while typing a name.
+  `/api/cards` never caches the search itself (only writes individual
+  cards to cache *after* a search, for later single-ID lookups), so every
+  one of these was a real live call to a rate-limited third party, not a
+  local operation.
+- Changed to an explicit search model: filter/name changes update local
+  "draft" state only (bound to the form) and never fire anything by
+  themselves. A new `onSubmit` on `CardSearchFilters` (a proper `<form>`
+  now, with a Search button) is the only thing that triggers a fetch —
+  Enter key or the button, both pages, matching behaviour. No fetch at all
+  happens until the first explicit search; both pages show a plain prompt
+  state ("Search or filter to see cards") instead.
+- Scope decision made without further discussion, since it wasn't
+  explicitly specified: *all* criteria (name typing and dropdown
+  selections alike) are gated behind the same explicit Search action, not
+  just the name field. Reasoning: having dropdowns behave differently from
+  the name field (instant vs. gated) would be a more confusing, less
+  predictable model than one consistent rule — "adjust your criteria, then
+  search" — even though dropdown selections are individually cheaper than
+  a stream of keystrokes.
+- Pagination (Next/Previous) is unaffected and still works without
+  re-submitting — it reuses the last submitted search's criteria via a
+  separate `activeSearch` snapshot, only the page number changes.
+- The format toggle remains fully instant, unaffected by any of this —
+  it was never sent to the API in the first place (legality display is
+  purely a client-side filter over whatever's already loaded), so there
+  was never a request to gate there.
+- **Deliberately untouched**: the AI deck generator's Pokémon-name
+  autocomplete (`AiDeckGeneratorForm.tsx`) keeps its own independent
+  real-time debounced behaviour. It's a fundamentally different, much
+  cheaper interaction (a handful of name suggestions to prevent a typo,
+  not full card browsing) — an autocomplete that only responds to a
+  button press wouldn't really be an autocomplete. It doesn't use
+  `CardSearchFilters` at all, so this change doesn't touch it even
+  incidentally.
+- Updated the 6 e2e tests that implicitly depended on the old
+  auto-search-on-load behaviour (5 in `card-search.spec.ts`, 1 in
+  `deck-creation-flow.spec.ts`) to explicitly click Search before
+  asserting on results, matching the new real interaction.
+
+## Refinement: dropdown filters stay instant, only the name field is gated
+
+- Follow-up to the search-on-submit change above. Splitting the two
+  wasn't arbitrary — reasoning given was that dropdown selections are a
+  useful, low-cost way to immediately confirm a typed name actually
+  matches something real, since there's no fuzzy matching to lean on
+  otherwise. Reverted dropdowns (card type, energy type, set, rarity)
+  back to firing an immediate search on selection; the name field still
+  only searches on explicit Enter/Search.
+- Implementation note: `onSubmit` now optionally accepts an override
+  filter state (`onSubmit(overrideFilters?: CardFilterState)`), and the
+  dropdowns call it directly with the freshly-computed next state rather
+  than relying on the parent's `value` prop having already re-rendered by
+  the time the search fires. Calling `onChange` then immediately reading
+  back `value` in the same synchronous handler would have used a stale
+  snapshot, since React state updates aren't reflected until the next
+  render — passing the exact new state explicitly sidesteps that
+  entirely, rather than working around it with an effect or a ref.

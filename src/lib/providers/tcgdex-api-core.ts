@@ -278,6 +278,19 @@ export function createTcgdexApiProvider(): CardProvider {
    * here rather than trying to build one combined query string, since
    * the two APIs' filter grammars aren't compatible.
    *
+   * CRITICAL: an unprefixed value (`field=value`) is TCGdex's *laxist*
+   * substring filter, identical to `like:value` — NOT an exact match.
+   * A real production sync bug came from this: `set.id=swsh1` (no
+   * prefix) also matched `swsh10`, `swsh11`, `swsh12`, `swsh12.5`, etc.,
+   * silently pulling every one of those sets' cards into the "swsh1"
+   * sync bucket, duplicate-fetching cards across multiple sets and
+   * eventually causing a Postgres "ON CONFLICT DO UPDATE... twice"
+   * error once two duplicate rows landed in the same write batch. Every
+   * field below that needs an EXACT match — category, types, set.id,
+   * rarity — must use the `eq:` prefix explicitly. Only `name` is
+   * intentionally left as the laxist default, since fuzzy substring
+   * matching is the actual desired behavior for name search.
+   *
    * NOTE: TCGdex's list endpoint returns `CardBrief` (id/name/image/
    * localId only, no full card data) even when filtered — there is no
    * documented single call that returns full card data AND a total
@@ -295,11 +308,12 @@ export function createTcgdexApiProvider(): CardProvider {
     const params: Record<string, string> = {};
     if (input.name?.trim()) params.name = `like:${input.name.trim()}`;
     if (input.supertype) {
-      params.category = input.supertype === "Pokémon" ? "Pokemon" : input.supertype;
+      const category = input.supertype === "Pokémon" ? "Pokemon" : input.supertype;
+      params.category = `eq:${category}`;
     }
-    if (input.pokemonType?.trim()) params.types = input.pokemonType.trim();
-    if (input.setId?.trim()) params["set.id"] = input.setId.trim();
-    if (input.rarity?.trim()) params.rarity = input.rarity.trim();
+    if (input.pokemonType?.trim()) params.types = `eq:${input.pokemonType.trim()}`;
+    if (input.setId?.trim()) params["set.id"] = `eq:${input.setId.trim()}`;
+    if (input.rarity?.trim()) params.rarity = `eq:${input.rarity.trim()}`;
 
     return tcgdexFetch<RawCardBrief[]>("/cards", params);
   }
@@ -364,8 +378,36 @@ export function createTcgdexApiProvider(): CardProvider {
     },
 
     async getSets(): Promise<CardSet[]> {
-      const sets = await tcgdexFetch<RawSet[]>("/sets");
-      return sets.map(normalizeSet);
+      const briefs = await tcgdexFetch<RawSet[]>("/sets");
+
+      // TCGdex's /sets LIST endpoint returns a lightweight brief
+      // (id/name/logo/symbol/cardCount) — confirmed via a real sync run
+      // that it does NOT include releaseDate, even though the full
+      // per-set object does. Every set was syncing with an effectively
+      // blank release date as a result, which broke both the "newest
+      // set first" dropdown ordering and card search's own "newest
+      // first" default (cards inherit set_release_date from here).
+      // Fetching each set's detail individually is the fix — one extra
+      // request per set, deliberately unpaced beyond a small courtesy
+      // delay, since the sync script's own withPacingAndRetry wraps
+      // this whole getSets() call as a single unit rather than pacing
+      // each internal request the way the per-set card fetch loop does.
+      const detailed: CardSet[] = [];
+      for (const brief of briefs) {
+        try {
+          const raw = await tcgdexFetch<RawSet>(`/sets/${encodeURIComponent(brief.id)}`);
+          detailed.push(normalizeSet(raw));
+        } catch {
+          // Best-effort: one set's detail failing shouldn't abort the
+          // whole sets fetch. Falls back to the brief with an empty
+          // releaseDate — that set will simply sort last until a later
+          // sync run succeeds for it.
+          detailed.push(normalizeSet(brief));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      }
+
+      return detailed;
     },
   };
 

@@ -190,6 +190,22 @@ async function main() {
 
   console.log(`Card sync complete: ${sets.length} sets attempted, ${allSyncedCards.length} cards synced.`);
 
+  // Defense-in-depth: dedupe by id before anything downstream depends on
+  // ids being unique within a single write batch. A real production bug
+  // (see the eq: filter fix in tcgdex-api-core.ts) previously caused the
+  // same card to be fetched under more than one "set" due to TCGdex's
+  // laxist substring-match filter matching set.id=swsh1 against swsh10,
+  // swsh11, etc. — which surfaced here as a Postgres "ON CONFLICT DO
+  // UPDATE... twice" error. That root cause is now fixed at the source,
+  // but deduping here costs nothing and guards against any other future
+  // source of duplicate ids doing the same thing (last-write-wins).
+  const uniqueSyncedCards = [...new Map(allSyncedCards.map((c) => [c.id, c])).values()];
+  if (uniqueSyncedCards.length !== allSyncedCards.length) {
+    console.warn(
+      `Deduped ${allSyncedCards.length - uniqueSyncedCards.length} duplicate card id(s) before evolvesTo derivation.`,
+    );
+  }
+
   // Second pass: derive evolvesTo now that every successfully-synced
   // card's evolveFrom is known.
   //
@@ -205,10 +221,10 @@ async function main() {
   // script. Every card is already held in memory from the main loop
   // above, so re-deriving the full row here costs nothing extra.
   console.log("Deriving evolvesTo (reverse-index pass)...");
-  const evolvesToIndex = buildEvolvesToIndex(allSyncedCards);
+  const evolvesToIndex = buildEvolvesToIndex(uniqueSyncedCards);
   console.log(`Found evolvesTo data for ${evolvesToIndex.size} cards.`);
 
-  const cardsNeedingUpdate = allSyncedCards
+  const cardsNeedingUpdate = uniqueSyncedCards
     .filter((c) => evolvesToIndex.has(c.id))
     .map((c) => ({ ...c, evolvesTo: evolvesToIndex.get(c.id)! }));
 

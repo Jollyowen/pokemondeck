@@ -8,6 +8,9 @@ function deck(overrides: Partial<Record<string, unknown>> = {}) {
     status: "draft",
     cardCount: 42,
     updatedAt: "2026-07-01T12:00:00.000Z",
+    mainPokemonCardId: null,
+    mainPokemonImageSmall: null,
+    energyTypes: [],
     ...overrides,
   };
 }
@@ -25,7 +28,11 @@ test("lists decks with their status, format and card count", async ({ page }) =>
     route.fulfill({ json: { decks: [deck()] } }),
   );
   await page.goto("/decks");
-  await expect(page.getByRole("link", { name: "Charizard Control" })).toBeVisible();
+  // { exact: true }: the deck card also has an "Open <name>" icon-button
+  // link, whose accessible name is a superstring of the bare deck name —
+  // same strict-mode-ambiguity shape already hit (and fixed) elsewhere in
+  // this suite, see DECISIONS.md.
+  await expect(page.getByRole("link", { name: "Charizard Control", exact: true })).toBeVisible();
   await expect(page.getByText("42 / 60 cards")).toBeVisible();
   await expect(page.getByText("Draft")).toBeVisible();
 });
@@ -46,6 +53,10 @@ test("renaming a deck sends the new name to the server", async ({ page }) => {
   });
 
   await page.goto("/decks");
+  // Rename/Duplicate/Delete buttons carry the deck name in their
+  // accessible name too (e.g. "Rename Charizard Control"); substring
+  // matching on "Rename" alone still resolves to exactly one button here
+  // since it's the only action whose name contains that word.
   await page.getByRole("button", { name: "Rename" }).click();
   const input = page.getByRole("textbox");
   await input.fill("New Name");
@@ -69,10 +80,10 @@ test("deleting a deck removes it immediately and offers undo", async ({ page }) 
   page.on("dialog", (dialog) => dialog.accept());
 
   await page.goto("/decks");
-  await expect(page.getByRole("link", { name: "Charizard Control" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Charizard Control", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Delete" }).click();
 
-  await expect(page.getByRole("link", { name: "Charizard Control" })).not.toBeVisible();
+  await expect(page.getByRole("link", { name: "Charizard Control", exact: true })).not.toBeVisible();
   await expect(page.getByText('Deleted "Charizard Control"')).toBeVisible();
   await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
 });

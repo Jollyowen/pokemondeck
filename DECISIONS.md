@@ -1331,3 +1331,53 @@ Last of three staged groups from the five-part UI/UX batch (item 5 of 5).
   succeeds, and a dev-server smoke test confirms the route renders
   without crashing.
 - This closes out all five items of the original UI/UX request.
+
+## Fix: deck library page crashed on render, taking all four deck-library e2e tests down with it
+
+- Real CI failure right after the UI/UX batch-1 deliverable: 4 of 5
+  `deck-library.spec.ts` tests failed, three of them on
+  `getByRole("link", { name: "Charizard Control" })` never appearing at
+  all, one on a 30s timeout waiting for the "Rename" button. The
+  `[WebServer] Fast Refresh had to perform a full reload due to a runtime
+  error` line in the log was the real signal — this wasn't 4 independent
+  test problems, it was one client-side crash taking the whole page down
+  with it.
+- **Root cause**: `/decks/page.tsx` reads `deck.energyTypes.length`
+  unconditionally for the type-icon stack. The e2e tests' `deck()` mock
+  fixture predates the batch-1 `energyTypes`/`mainPokemonImageSmall`
+  additions to the deck-list API response, so the mocked payload simply
+  doesn't have that field — `energyTypes` is `undefined`,
+  `.length` throws, React unmounts, nothing after that point in the page
+  ever renders. Every other assertion failure was downstream of this one
+  throw.
+- **Fixed two ways, deliberately**: (1) the page itself now defaults
+  `deck.energyTypes ?? []` and `deck.mainPokemonImageSmall ?? null`
+  rather than assuming the API always sends them — a render should
+  degrade to "no icons shown" on an unexpected/older payload shape, never
+  crash outright. (2) the e2e fixture was also updated to include the
+  real current fields (`mainPokemonCardId: null, mainPokemonImageSmall:
+  null, energyTypes: []`), since a mock that no longer matches the real
+  API response shape is itself a latent bug in the test, not just in the
+  app. Both fixes are kept, not just one — the defensive client code and
+  the accurate fixture are protecting against different failure modes
+  (a genuinely stale/partial API response vs. a test that's drifted from
+  reality).
+- **Second, independent bug found while fixing the first**: once the
+  crash is fixed, `getByRole("link", { name: "Charizard Control" })`
+  would have started failing a different way — Playwright's default
+  substring name matching means it now matches *two* links: the deck
+  title itself, and the new "Open <deck name>" icon-button link added in
+  the same batch, whose accessible name (`"Open Charizard Control"`)
+  contains the bare deck name as a substring. Exact same strict-mode
+  ambiguity shape as the `"Trainer A"` fix documented earlier in this
+  file. Fixed the same way: `{ exact: true }` on the title-link
+  assertions specifically (the Rename/Delete/Undo button assertions
+  don't need it — "Rename"/"Delete"/"Undo" aren't substrings of any other
+  accessible name on the page).
+- Could not run the actual Playwright suite in this sandbox to confirm
+  green (same pre-existing browser-download-blocked-by-network-allowlist
+  limitation noted in earlier phases) — fixed by direct code inspection
+  of both the crash site and the resulting DOM shape, not by guessing.
+  `tsc`, `eslint`, all 154 unit tests, and a full production build all
+  pass. Worth treating the next real CI run as the actual confirmation,
+  the same way the Phase-8-era e2e fixes in this file were.

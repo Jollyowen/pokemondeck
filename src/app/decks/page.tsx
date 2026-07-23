@@ -20,8 +20,12 @@ type DeckListItem = {
   cardCount: number;
   updatedAt: string;
   mainPokemonCardId: string | null;
-  mainPokemonImageSmall: string | null;
-  energyTypes: string[];
+  // Optional here (even though the server always sends them) because this
+  // type is also what a stale test fixture / older cached response looks
+  // like — the render must degrade gracefully, not crash, if these are
+  // missing.
+  mainPokemonImageSmall?: string | null;
+  energyTypes?: string[];
 };
 
 const STATUS_LABEL: Record<DeckStatus, string> = {
@@ -183,13 +187,13 @@ export default function DeckLibraryPage() {
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {decks.map((deck) => (
             <li key={deck.id} className="flex flex-col rounded-lg border border-neutral-200 p-4">
-              <DeckStackThumbnail imageSmall={deck.mainPokemonImageSmall} deckName={deck.name} />
+              <DeckStackThumbnail imageSmall={deck.mainPokemonImageSmall ?? null} deckName={deck.name} />
 
               <div className="mt-3 min-w-0">
                 <div className="flex items-start gap-1.5">
-                  {deck.energyTypes.length > 0 && (
+                  {(deck.energyTypes ?? []).length > 0 && (
                     <div className="pt-0.5 shrink-0">
-                      <EnergyTypeStack types={deck.energyTypes} size={18} />
+                      <EnergyTypeStack types={deck.energyTypes ?? []} size={18} />
                     </div>
                   )}
                   {renamingId === deck.id ? (

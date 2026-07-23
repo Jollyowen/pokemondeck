@@ -143,7 +143,7 @@ async function main() {
 
   const { error: setsError } = await supabase
     .from("sets")
-    .upsert(sets.map(setToRow), { onConflict: "id" });
+    .upsert(sets.map((s) => setToRow(s, "tcgdex")), { onConflict: "id" });
   if (setsError) {
     console.error("Failed to upsert sets:", setsError);
     process.exit(1);

@@ -15,6 +15,7 @@ export type CardDetailsJson = {
 
 export type CardRow = {
   id: string;
+  provider: string;
   name: string;
   supertype: string;
   subtypes: string[];
@@ -35,6 +36,7 @@ export type CardRow = {
 
 export type SetRow = {
   id: string;
+  provider: string;
   name: string;
   series: string;
   release_date: string;
@@ -44,6 +46,7 @@ export type SetRow = {
 export function cardToRow(card: Card, setReleaseDate: string): CardRow {
   return {
     id: card.id,
+    provider: card.provider,
     name: card.name,
     supertype: card.supertype,
     subtypes: card.subtypes,
@@ -78,7 +81,17 @@ export function cardToRow(card: Card, setReleaseDate: string): CardRow {
 export function rowToCard(row: CardRow): Card {
   return {
     id: row.id,
-    provider: "pokemon_tcg_api",
+    // BUG FIX: this used to unconditionally hardcode "pokemon_tcg_api"
+    // here regardless of which provider actually synced the row — every
+    // card read from the local database reported the same provider
+    // string no matter its real source, which made `provider` useless
+    // as evidence of whether a row was old pokemontcg.io-era data or a
+    // fresh TCGdex sync. Now reads the row's own `provider` column,
+    // which cardToRow (below) started actually writing at the same time
+    // this was fixed. See DECISIONS.md for the full story — this is
+    // also why "stale data" couldn't be confirmed from `provider` alone
+    // before this fix.
+    provider: row.provider as Card["provider"],
     name: row.name,
     number: row.number ?? "",
     setId: row.set_id,
@@ -108,10 +121,10 @@ export function rowToCard(row: CardRow): Card {
   };
 }
 
-export function setToRow(set: CardSet): SetRow {
-  return { id: set.id, name: set.name, series: set.series, release_date: set.releaseDate };
+export function setToRow(set: CardSet, provider: string): SetRow {
+  return { id: set.id, provider, name: set.name, series: set.series, release_date: set.releaseDate };
 }
 
 export function rowToSet(row: SetRow): CardSet {
-  return { id: row.id, name: row.name, series: row.series, releaseDate: row.release_date };
+  return { id: row.id, provider: row.provider, name: row.name, series: row.series, releaseDate: row.release_date };
 }

@@ -70,6 +70,14 @@ export type CardSet = {
   name: string;
   series: string;
   releaseDate: string;
+  /**
+   * Local-database bookkeeping only — which provider's sync last wrote
+   * this row. Not set by live provider adapters (TCGdex's own getSets()
+   * doesn't populate this; it's stamped on at the DB-write boundary in
+   * card-row-mapping.ts). Undefined for a set object that only ever
+   * existed in memory and was never round-tripped through the DB.
+   */
+  provider?: string;
 };
 
 export type DeckFormat = "standard" | "expanded" | "all";

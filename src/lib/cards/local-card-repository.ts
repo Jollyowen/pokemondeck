@@ -110,5 +110,8 @@ export async function upsertCards(cards: Card[], setReleaseDatesById: Record<str
 export async function upsertSets(sets: CardSet[]): Promise<void> {
   if (sets.length === 0) return;
   const supabase = getSupabaseServerClient();
-  await supabase.from("sets").upsert(sets.map(setToRow), { onConflict: "id" });
+  // The only caller of this function (api/sets/route.ts's cold-start
+  // live-fallback path) sources sets exclusively from tcgdexApiProvider,
+  // so "tcgdex" is accurate here, not a guess.
+  await supabase.from("sets").upsert(sets.map((s) => setToRow(s, "tcgdex")), { onConflict: "id" });
 }

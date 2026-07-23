@@ -40,6 +40,18 @@ describe("cardToRow / rowToCard round-trip", () => {
     expect(roundTripped).toEqual(card);
   });
 
+  it("preserves the real provider through the round trip, not a hardcoded value", () => {
+    // Regression test for a real bug: rowToCard used to unconditionally
+    // hardcode provider: "pokemon_tcg_api" on read, regardless of what
+    // was actually written. A tcgdex-sourced card would silently come
+    // back mislabeled as pokemon_tcg_api after a DB round trip.
+    const card = makeCard({ id: "sv02-279", name: "Basic Water Energy", provider: "tcgdex" });
+    const row = cardToRow(card, "2023/06/09");
+    expect(row.provider).toBe("tcgdex");
+    const roundTripped = rowToCard(row);
+    expect(roundTripped.provider).toBe("tcgdex");
+  });
+
   it("preserves a card with null/empty optional fields", () => {
     const card = makeCard({
       id: "x",
@@ -70,10 +82,11 @@ describe("cardToRow / rowToCard round-trip", () => {
 });
 
 describe("setToRow / rowToSet round-trip", () => {
-  it("preserves every field through a full round trip", () => {
+  it("preserves every field through a full round trip, including the explicitly-passed provider", () => {
     const set: CardSet = { id: "swsh1", name: "Sword & Shield", series: "Sword & Shield", releaseDate: "2020/02/07" };
-    const row = setToRow(set);
+    const row = setToRow(set, "tcgdex");
+    expect(row.provider).toBe("tcgdex");
     const roundTripped = rowToSet(row);
-    expect(roundTripped).toEqual(set);
+    expect(roundTripped).toEqual({ ...set, provider: "tcgdex" });
   });
 });

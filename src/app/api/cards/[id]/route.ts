@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api";
+import { tcgdexApiProvider, TcgdexApiError } from "@/lib/providers/tcgdex-api";
 import { getLocalCard, upsertCard } from "@/lib/cards/local-card-repository";
 import { withApiErrorHandling } from "@/lib/api/with-error-handling";
 import type { ApiError } from "@/types/api";
@@ -19,7 +19,7 @@ export const GET = withApiErrorHandling(async (
   // catalogue since the last sync run. Live-fetch as a fallback, and
   // write it back locally so it's a cache hit next time.
   try {
-    const card = await pokemonTcgApiProvider.getCard(id);
+    const card = await tcgdexApiProvider.getCard(id);
     if (!card) {
       const body: ApiError = {
         error: { code: "CARD_NOT_FOUND", message: `No card found with id "${id}".` },
@@ -29,7 +29,7 @@ export const GET = withApiErrorHandling(async (
     await upsertCard(card);
     return NextResponse.json(card);
   } catch (error) {
-    if (error instanceof PokemonTcgApiError) {
+    if (error instanceof TcgdexApiError) {
       const body: ApiError = {
         error: {
           code: "PROVIDER_UNAVAILABLE",

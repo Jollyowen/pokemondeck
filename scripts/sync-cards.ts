@@ -1,7 +1,7 @@
 /**
  * Standalone sync script — fetches the full Pokémon TCG catalogue (every
- * set, every card) and upserts it into the local `sets` and `cards`
- * tables. Run via the scheduled GitHub Actions workflow
+ * set, every card) from TCGdex and upserts it into the local `sets` and
+ * `cards` tables. Run via the scheduled GitHub Actions workflow
  * (.github/workflows/sync-cards.yml), never through the running app or a
  * public endpoint.
  *
@@ -10,32 +10,29 @@
  * Required environment variables (see .env.example):
  *   NEXT_PUBLIC_SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
- *   POKEMON_TCG_API_KEY
+ * (POKEMON_TCG_API_KEY is no longer required — TCGdex needs no API key.
+ * Left in .env.example as optional/unused rather than removed outright,
+ * in case the pokemontcg.io adapter is ever needed again as a fallback.)
  *
  * Deliberately does NOT reuse src/lib/supabase/server.ts or
  * src/lib/cards/local-card-repository.ts directly — both depend on
  * getServerEnv(), which validates the app's FULL environment (every AI
- * key, every other secret), not just the three this script actually
- * needs. Instead this constructs its own minimal Supabase client and
- * calls the shared, dependency-free row-mapping functions directly.
+ * key, every other secret), not just what this script actually needs.
+ * Instead this constructs its own minimal Supabase client and calls the
+ * shared, dependency-free row-mapping functions directly.
  *
- * Paced deliberately: the Pokémon TCG API caps authenticated requests at
- * 30/minute (per their docs). A full sync is 175-250+ requests (one per
- * set for the set list, roughly one per set for its cards, more for sets
- * with 250+ cards) — firing them back-to-back with no delay reliably
- * trips the limit partway through a run, which is exactly what happened
- * the first time this ran for real. REQUEST_INTERVAL_MS keeps this
- * comfortably under that cap; retryWithBackoff absorbs whatever transient
- * failures still happen (rate-limit blips, momentary server errors)
- * rather than aborting the whole run over one bad request.
+ * Paced defensively even though TCGdex documents no per-key rate limit
+ * (it's unauthenticated) — courtesy to a free, community-run service,
+ * and cheap insurance against an undocumented limit. Lighter pacing than
+ * the old pokemontcg.io sync used, since there's no known 30/minute cap
+ * to respect here.
  */
 import { createClient } from "@supabase/supabase-js";
-import { createPokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api-core";
-import { cardToRow, setToRow } from "@/lib/cards/card-row-mapping";
+import { createTcgdexApiProvider, TcgdexApiError } from "@/lib/providers/tcgdex-api-core";
+import { cardToRow, setToRow, type CardRow } from "@/lib/cards/card-row-mapping";
+import type { Card } from "@/types/card";
 
-// ~24 requests/minute — comfortably under the documented 30/minute cap,
-// leaving headroom for retries without tipping back over the limit.
-const REQUEST_INTERVAL_MS = 2500;
+const REQUEST_INTERVAL_MS = 250;
 const MAX_ATTEMPTS = 4;
 
 function requireEnv(name: string): string {
@@ -54,10 +51,10 @@ function sleep(ms: number): Promise<void> {
 /**
  * Runs fn with retry + exponential backoff (2s, 4s, 8s, ...) on top of
  * the fixed pacing delay above — for absorbing transient failures
- * (a rate-limit blip, a momentary 500) rather than aborting the entire
- * sync over one bad request. Always waits REQUEST_INTERVAL_MS before
- * returning, success or failure, so the pacing holds regardless of how
- * many retries a given request needed.
+ * (a momentary 5xx, a dropped connection) rather than aborting the
+ * entire sync over one bad request. Always waits REQUEST_INTERVAL_MS
+ * before returning, success or failure, so the pacing holds regardless
+ * of how many retries a given request needed.
  */
 async function withPacingAndRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
   let lastError: unknown;
@@ -68,7 +65,7 @@ async function withPacingAndRetry<T>(label: string, fn: () => Promise<T>): Promi
       return result;
     } catch (error) {
       lastError = error;
-      const isRetryable = error instanceof PokemonTcgApiError;
+      const isRetryable = error instanceof TcgdexApiError;
       if (!isRetryable || attempt === MAX_ATTEMPTS) {
         await sleep(REQUEST_INTERVAL_MS);
         throw error;
@@ -85,15 +82,60 @@ async function withPacingAndRetry<T>(label: string, fn: () => Promise<T>): Promi
   throw lastError;
 }
 
+/**
+ * `evolvesTo` reverse-index pass.
+ *
+ * TCGdex only gives the reverse pointer (`evolveFrom`); there is no
+ * forward `evolvesTo` field to fetch directly (see DECISIONS.md and
+ * tcgdex-api-core.ts's normalizeCard doc comment for the full
+ * reasoning). Every card synced in this run comes through here with
+ * evolvesTo already normalized to `[]`; this function derives the real
+ * value in memory and returns an id -> evolvesTo[] map for the caller
+ * to fold back into each row before upserting.
+ *
+ * Matching is by name only — the same accepted limitation already
+ * documented for the existing evolution-line quick-add feature (two
+ * unrelated cards can share a name; this can't distinguish them from
+ * evolvesFrom/evolvesTo alone). Not attempting anything cleverer here,
+ * for consistency with that existing, already-accepted tradeoff.
+ *
+ * This has to run as a second pass over the *whole* synced set, not
+ * per-card inline during the main upsert loop: a card's evolvesTo can
+ * only be known once every other card's evolveFrom has been seen, and
+ * nothing guarantees a Basic is synced before the Stage 1/2 cards that
+ * evolve from it.
+ */
+function buildEvolvesToIndex(cards: Card[]): Map<string, string[]> {
+  // name (lowercased) -> ids of cards whose evolveFrom equals that name
+  const byEvolveFromName = new Map<string, string[]>();
+  for (const card of cards) {
+    if (!card.evolvesFrom) continue;
+    const key = card.evolvesFrom.toLowerCase();
+    const existing = byEvolveFromName.get(key) ?? [];
+    existing.push(card.id);
+    byEvolveFromName.set(key, existing);
+  }
+
+  // For each card, its evolvesTo is: ids of every card whose evolveFrom
+  // matches THIS card's own name.
+  const evolvesToById = new Map<string, string[]>();
+  for (const card of cards) {
+    const evolvesTo = byEvolveFromName.get(card.name.toLowerCase());
+    if (evolvesTo && evolvesTo.length > 0) {
+      evolvesToById.set(card.id, evolvesTo);
+    }
+  }
+  return evolvesToById;
+}
+
 async function main() {
   const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   const supabaseKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-  const apiKey = requireEnv("POKEMON_TCG_API_KEY");
 
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const provider = createPokemonTcgApiProvider(() => apiKey);
+  const provider = createTcgdexApiProvider();
 
   console.log("Fetching sets...");
   const sets = await withPacingAndRetry("fetch sets", () => provider.getSets());
@@ -107,31 +149,30 @@ async function main() {
     process.exit(1);
   }
 
-  let totalCards = 0;
+  // Every card gathered in memory this run, kept around (in addition to
+  // being upserted immediately per-set as before) specifically so the
+  // evolvesTo pass below has the full picture once every set has synced.
+  // This is the one place a full-catalogue-in-memory tradeoff is made
+  // deliberately, for a one-off nightly/weekly script — ~20-30k cards of
+  // normalized data is a trivial memory footprint for a GitHub Actions
+  // runner, not something worth streaming around.
+  const allSyncedCards: Card[] = [];
   const failedSets: string[] = [];
 
   for (const set of sets) {
     try {
-      let page = 1;
-      const pageSize = 250;
+      const result = await withPacingAndRetry(`fetch cards (set ${set.id})`, () =>
+        provider.searchCards({ setId: set.id, page: 1, pageSize: 999 }),
+      );
 
-      for (;;) {
-        const result = await withPacingAndRetry(`search cards (set ${set.id}, page ${page})`, () =>
-          provider.searchCards({ setId: set.id, page, pageSize }),
-        );
-        if (result.cards.length === 0) break;
+      const rows = result.cards.map((c) => cardToRow(c, set.releaseDate));
+      const { error } = await supabase.from("cards").upsert(rows, { onConflict: "id" });
+      if (error) throw new Error(`Supabase upsert failed: ${error.message}`);
 
-        const rows = result.cards.map((c) => cardToRow(c, set.releaseDate));
-        const { error } = await supabase.from("cards").upsert(rows, { onConflict: "id" });
-        if (error) throw new Error(`Supabase upsert failed: ${error.message}`);
-
-        totalCards += result.cards.length;
-        if (result.cards.length < pageSize) break; // last page for this set
-        page += 1;
-      }
-      console.log(`Synced set ${set.id} (${set.name}).`);
+      allSyncedCards.push(...result.cards);
+      console.log(`Synced set ${set.id} (${set.name}): ${result.cards.length} cards.`);
     } catch (error) {
-      // Don't let one bad set abort the other 170+ — log it and move on.
+      // Don't let one bad set abort the rest — log it and move on.
       // Upserts are idempotent, so re-running the sync later (or the next
       // scheduled run) will naturally pick up anything missed here.
       console.error(
@@ -142,7 +183,36 @@ async function main() {
     }
   }
 
-  console.log(`Sync complete: ${sets.length} sets attempted, ${totalCards} cards synced.`);
+  console.log(`Card sync complete: ${sets.length} sets attempted, ${allSyncedCards.length} cards synced.`);
+
+  // Second pass: derive evolvesTo now that every successfully-synced
+  // card's evolveFrom is known, and write it back as a targeted update
+  // (only touching the evolves_to column, not re-upserting full rows).
+  console.log("Deriving evolvesTo (reverse-index pass)...");
+  const evolvesToIndex = buildEvolvesToIndex(allSyncedCards);
+  console.log(`Found evolvesTo data for ${evolvesToIndex.size} cards.`);
+
+  const evolvesToEntries = [...evolvesToIndex.entries()];
+  const UPDATE_BATCH_SIZE = 500;
+  for (let i = 0; i < evolvesToEntries.length; i += UPDATE_BATCH_SIZE) {
+    const batch = evolvesToEntries.slice(i, i + UPDATE_BATCH_SIZE);
+    // No native "bulk update different values per row" in the Supabase
+    // JS client's query builder — upserting minimal rows (id + the one
+    // changed column) against the existing onConflict: "id" behavior
+    // achieves the same targeted update without a raw SQL round trip,
+    // and reuses the same upsert path already used everywhere else in
+    // this script rather than introducing a second write pattern.
+    const partialRows = batch.map(([id, evolvesTo]) => ({ id, evolves_to: evolvesTo }));
+    const { error } = await supabase
+      .from("cards")
+      .upsert(partialRows as Partial<CardRow>[], { onConflict: "id" });
+    if (error) {
+      console.error(`Failed to write evolvesTo batch starting at index ${i}:`, error);
+      process.exit(1);
+    }
+  }
+  console.log("evolvesTo derivation complete.");
+
   if (failedSets.length > 0) {
     console.error(`${failedSets.length} set(s) failed and were skipped: ${failedSets.join(", ")}`);
     console.error("Re-run the sync to retry them — already-synced sets/cards are unaffected.");

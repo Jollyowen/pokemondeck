@@ -12,7 +12,9 @@ export type CardPrice = {
 
 export type Card = {
   id: string;
-  provider: "pokemon_tcg_api";
+  // "pokemon_tcg_api" kept for cards synced before the TCGdex migration
+  // and never re-synced; not written by any provider going forward.
+  provider: "pokemon_tcg_api" | "tcgdex";
   name: string;
   number: string;
   setId: string;

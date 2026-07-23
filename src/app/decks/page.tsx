@@ -26,6 +26,7 @@ type DeckListItem = {
   // missing.
   mainPokemonImageSmall?: string | null;
   energyTypes?: string[];
+  estimatedValue?: { total: number; currency: "USD"; missingPriceCount: number } | null;
 };
 
 const STATUS_LABEL: Record<DeckStatus, string> = {
@@ -187,9 +188,7 @@ export default function DeckLibraryPage() {
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {decks.map((deck) => (
             <li key={deck.id} className="flex flex-col rounded-lg border border-neutral-200 p-4">
-              <DeckStackThumbnail imageSmall={deck.mainPokemonImageSmall ?? null} deckName={deck.name} />
-
-              <div className="mt-3 min-w-0">
+              <div className="min-w-0">
                 <div className="flex items-start gap-1.5">
                   {(deck.energyTypes ?? []).length > 0 && (
                     <div className="pt-0.5 shrink-0">
@@ -216,8 +215,14 @@ export default function DeckLibraryPage() {
                     </Link>
                   )}
                 </div>
+              </div>
 
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500">
+              <div className="mt-2">
+                <DeckStackThumbnail imageSmall={deck.mainPokemonImageSmall ?? null} deckName={deck.name} />
+              </div>
+
+              <div className="mt-3 min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500">
                   <span className={`rounded-full px-2 py-0.5 whitespace-nowrap ${STATUS_COLOR[deck.status]}`}>
                     {STATUS_LABEL[deck.status]}
                   </span>
@@ -225,6 +230,19 @@ export default function DeckLibraryPage() {
                     {deck.format === "all" ? "All formats" : deck.format}
                   </span>
                   <span className="whitespace-nowrap">{deck.cardCount} / 60 cards</span>
+                  {deck.estimatedValue && (
+                    <span
+                      className="whitespace-nowrap"
+                      title={
+                        deck.estimatedValue.missingPriceCount > 0
+                          ? `${deck.estimatedValue.missingPriceCount} card(s) have no price data and aren't included`
+                          : "TCGplayer market price"
+                      }
+                    >
+                      ${deck.estimatedValue.total.toFixed(2)}
+                      {deck.estimatedValue.missingPriceCount > 0 ? "+" : ""}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-1 text-xs text-neutral-400">Updated {formatDate(deck.updatedAt)}</div>
               </div>

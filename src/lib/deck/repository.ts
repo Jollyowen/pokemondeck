@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "crypto";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getLocalCards } from "@/lib/cards/local-card-repository";
+import { computeEstimatedDeckValue, type EstimatedDeckValue } from "@/lib/deck/deck-value";
 import { reportError } from "@/lib/monitoring/report-error";
 import type { Deck, DeckCardEntry, DeckStatus, StrategyArchetype } from "@/types/deck";
 import type { DeckFormat } from "@/types/card";
@@ -180,6 +181,14 @@ export type DeckListItem = {
    * same convention already used by the statistics engine.
    */
   energyTypes: string[];
+  /**
+   * Same computation as the deck editor's own stats panel
+   * (computeEstimatedDeckValue), run here server-side since the library
+   * view never loads full per-deck card data into the client the way
+   * the editor does. Null when no card in the deck has price data at
+   * all (not the same as $0 — that would be misleading).
+   */
+  estimatedValue: EstimatedDeckValue | null;
 };
 
 export async function listOwnedDecks(ownerId: string, sortBy: DeckSortBy): Promise<DeckListItem[]> {
@@ -255,6 +264,15 @@ export async function listOwnedDecks(ownerId: string, sortBy: DeckSortBy): Promi
 
     const mainCard = d.main_pokemon_card_id ? cardById.get(d.main_pokemon_card_id) : undefined;
 
+    // Reuses the exact same pure function the deck editor's stats panel
+    // uses — DeckCardEntry only needs cardId/quantity for this
+    // computation, and cardById is already resolved above for the
+    // energy-type stack, so no extra query is needed here.
+    const estimatedValue = computeEstimatedDeckValue(
+      deckCards.map((c) => ({ cardId: c.cardId, quantity: c.quantity, cardName: "" })),
+      Object.fromEntries(cardById),
+    );
+
     return {
       id: d.id,
       name: d.name,
@@ -265,6 +283,7 @@ export async function listOwnedDecks(ownerId: string, sortBy: DeckSortBy): Promi
       mainPokemonCardId: d.main_pokemon_card_id,
       mainPokemonImageSmall: mainCard?.imageSmall ?? null,
       energyTypes,
+      estimatedValue,
     };
   });
 }

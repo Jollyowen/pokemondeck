@@ -43,6 +43,9 @@ export function AddCardTile({
         )}
       </button>
       <p className="mt-1 text-xs font-medium truncate">{card.name}</p>
+      <p className="text-xs text-neutral-500 truncate">
+        {card.setName} · {card.number}
+      </p>
       {price && <p className="text-xs text-neutral-400">{price}</p>}
       <button
         type="button"

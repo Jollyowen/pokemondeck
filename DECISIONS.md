@@ -1443,3 +1443,49 @@ Last of three staged groups from the five-part UI/UX batch (item 5 of 5).
   overwrites from divergent starting points), not a bug in either
   change individually. Resolved by consolidating both branches of work
   into one tree before this zip.
+
+## Fix + additions: deck cost on library view, search-tile consistency, deck-row info stacking, Energy-type filter gap
+
+- **Deck library cost**: `listOwnedDecks` now computes `estimatedValue`
+  server-side via the same pure `computeEstimatedDeckValue` function the
+  deck editor already uses — no new query, since the function's needed
+  card data (`cardById`) was already being resolved there for the
+  energy-type stack. Shown next to status/format/card-count on
+  `/decks`; a `+` suffix (matching the editor's own existing convention)
+  signals the total is a floor, not exact, when some cards have no
+  price data.
+- **Deck library layout**: deck name moved above the thumbnail per
+  request; no other reordering.
+- **`AddCardTile` (deck builder's search pane) now shows set name** —
+  it already showed price but not set, while the standalone `/cards`
+  catalogue's `CardTile` already showed both. Brought the two in line.
+- **Deck editor row info (Set / Energy type / Rarity) no longer shares
+  one truncated text line.** At deeper evolution-line indentation
+  levels the available width shrinks, so most of that line was getting
+  cut off. Now: set name on its own line, then type/rarity/price as
+  separate wrapping chips (flex-wrap) so they stack onto additional
+  lines instead of disappearing. Price is included in that chip row
+  too, not appended to the old single line.
+- **Energy-type search filter bug, found from a real reported result
+  set**: `types.contains([type])` alone missed many Basic/Special
+  Energy cards, because a meaningful number of them have an EMPTY
+  `types` array in the underlying data (confirmed directly — a "Basic
+  Water Energy" printing, `sve-3`, has `types: []`) even though the
+  card is unambiguously that type by name. Fixed by broadening the
+  filter for `supertype === "Energy"` specifically: match either
+  `types` containment OR a name substring match on the type word (how
+  every basic/special energy card is actually named), via `.or()`.
+  Non-Energy supertypes are unaffected — Pokémon cards' `types` field
+  is reliably populated, so the stricter containment-only filter stays
+  as-is for them.
+  - Not yet confirmed whether this same `types: []` gap exists in
+    freshly-TCGdex-synced Energy rows specifically, or only in the
+    older pokemontcg.io-era rows still sitting in the local database at
+    the time this was diagnosed (both example cards in the bug report
+    showed `"provider": "pokemon_tcg_api"`, suggesting the table may
+    not have been fully re-synced under TCGdex yet). The name-fallback
+    fix is deliberately provider-agnostic so it holds either way, but
+    worth revisiting once a confirmed-TCGdex-sourced dataset is in
+    place, in case TCGdex's own Energy-card `types` data turns out to
+    be more complete and this fallback becomes redundant (harmless
+    either way, just extra query complexity if so).

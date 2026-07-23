@@ -6,6 +6,7 @@ import type { DeckCardEntry } from "@/types/deck";
 import { isCardLegalInFormat } from "@/lib/format-legality";
 import { getEvolutionLineNames } from "@/lib/deck/evolution-line";
 import { formatCardPrice } from "@/lib/format-price";
+import { EnergyTypeStack } from "@/components/cards/EnergyTypeIcon";
 import { EvolutionLineSuggestions } from "@/components/decks/EvolutionLineSuggestions";
 import {
   groupPokemonByEvolutionLine,
@@ -56,12 +57,32 @@ function DeckCardRow({ entry, ...props }: { entry: DeckCardEntry } & SharedRowPr
         <div className="flex-1 min-w-0">
           <p className="text-sm truncate">{entry.cardName}</p>
           {card && (
-            <p className="text-xs text-neutral-500 truncate">
-              {card.setName}
-              {card.types.length > 0 && ` · ${card.types.join("/")}`}
-              {card.rarity && ` · ${card.rarity}`}
-              {price && ` · ${price}`}
-            </p>
+            <>
+              <p className="text-xs text-neutral-500 truncate">{card.setName}</p>
+              {/*
+                Set, energy type, and rarity used to share one truncated
+                text line — at deeper evolution-line indentation levels
+                the available width shrinks (see the depth-based
+                marginLeft in EvolutionGroupList below), so most of that
+                line got cut off entirely. Wrapping these as separate
+                chips lets them stack onto a second line instead of
+                disappearing. Price is included here too rather than
+                tacked onto the end of the old line, for the same reason.
+              */}
+              <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                {card.types.length > 0 && <EnergyTypeStack types={card.types} size={14} />}
+                {card.rarity && (
+                  <span className="whitespace-nowrap rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600">
+                    {card.rarity}
+                  </span>
+                )}
+                {price && (
+                  <span className="whitespace-nowrap rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600">
+                    {price}
+                  </span>
+                )}
+              </div>
+            </>
           )}
           {!legal && <span className="text-xs text-amber-700 whitespace-nowrap">Not legal in this format</span>}
         </div>

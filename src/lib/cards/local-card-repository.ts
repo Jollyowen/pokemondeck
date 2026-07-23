@@ -17,7 +17,26 @@ export async function searchLocalCards(input: CardSearchInput): Promise<CardSear
     query = query.ilike("name", `%${input.name.trim()}%`);
   }
   if (input.supertype) query = query.eq("supertype", input.supertype);
-  if (input.pokemonType?.trim()) query = query.contains("types", [input.pokemonType.trim()]);
+  if (input.pokemonType?.trim()) {
+    const type = input.pokemonType.trim();
+    if (input.supertype === "Energy") {
+      // Many Basic/Special Energy cards have an EMPTY `types` array in
+      // the underlying card data — confirmed from a real search result:
+      // a "Basic Water Energy" printing (sve-3) with types: [], even
+      // though the card is unambiguously Water-type by name. Strict
+      // array-containment alone silently excludes cards like this,
+      // which is why filtering Energy + a specific type was returning
+      // far fewer results than a plain name search for the same word.
+      // For Energy cards specifically, broaden the match to ALSO catch
+      // cards whose name contains the type word — how every basic/
+      // special energy card is actually named — rather than relying
+      // solely on a `types` field that isn't reliably populated for
+      // this supertype.
+      query = query.or(`types.cs.{${type}},name.ilike.%${type}%`);
+    } else {
+      query = query.contains("types", [type]);
+    }
+  }
   if (input.setId?.trim()) query = query.eq("set_id", input.setId.trim());
   if (input.rarity?.trim()) query = query.eq("rarity", input.rarity.trim());
 

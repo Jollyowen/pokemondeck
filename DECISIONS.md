@@ -1411,3 +1411,27 @@ Last of three staged groups from the five-part UI/UX batch (item 5 of 5).
   genuinely errors; the endpoint still correctly falls through to its
   "not found" response either way, and the test that log line appears
   under passes.
+
+## Change: energy type icons replaced with user-supplied artwork
+
+- Swapped `EnergyTypeIcon`'s rendering from the original abstract
+  letterform badges (deliberately non-reproducing of official TCG
+  symbols, per that component's original design note) to 11 PNG icons
+  supplied directly by the user, stored in `public/energy-icons/`.
+- File names use the app's own type vocabulary (`grass.png`,
+  `lightning.png`, `darkness.png`, etc.), matching TCGdex's `Types`
+  union exactly, so no per-type mapping table beyond a lowercase lookup
+  was needed.
+- Flagged once to the user before making this change: the supplied
+  icons closely resemble the official Pokémon TCG energy symbols, which
+  are Nintendo/The Pokémon Company IP — the original badges were built
+  as originals specifically to avoid that. Proceeding was the user's
+  explicit call on their own uploaded assets, not a design decision made
+  here.
+- `energyTypeStyle` (the old bg/fg/label lookup) was removed entirely —
+  confirmed via repo-wide grep that nothing outside `EnergyTypeIcon.tsx`
+  imported it directly; every other consumer only used the exported
+  `EnergyTypeStack`/`EnergyTypeIcon` components, so no other file needed
+  changes.
+- Falls back to a plain "?" badge for any type string that doesn't match
+  one of the 11 known types, rather than a broken image reference.

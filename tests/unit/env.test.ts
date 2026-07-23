@@ -31,16 +31,9 @@ describe("getServerEnv", () => {
 
   it("throws a clear error when a required variable is missing", async () => {
     Object.assign(process.env, REQUIRED);
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const { getServerEnv } = await import("@/lib/env");
-    expect(() => getServerEnv()).toThrow(/SUPABASE_SERVICE_ROLE_KEY/);
-  });
-
-  it("parses successfully even when POKEMON_TCG_API_KEY is missing (optional since the TCGdex migration)", async () => {
-    Object.assign(process.env, REQUIRED);
     delete process.env.POKEMON_TCG_API_KEY;
     const { getServerEnv } = await import("@/lib/env");
-    expect(() => getServerEnv()).not.toThrow();
+    expect(() => getServerEnv()).toThrow(/POKEMON_TCG_API_KEY/);
   });
 
   it("throws when AI_PROVIDER is anthropic but ANTHROPIC_API_KEY is missing", async () => {

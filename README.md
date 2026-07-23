@@ -61,8 +61,8 @@ Zod · Vitest · Playwright · Anthropic/OpenAI (AI review)
    alter table cards enable row level security;
    alter table sets enable row level security;
    ```
-5. No card-provider API key is needed — the app and the sync script
-   both use TCGdex (api.tcgdex.net), which is free and unauthenticated.
+5. Get a free Pokémon TCG API key from https://dev.pokemontcg.io and set
+   `POKEMON_TCG_API_KEY`.
 6. Set `AI_PROVIDER` (`anthropic` or `openai`), `AI_MODEL`, and the
    matching API key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`).
 
@@ -154,14 +154,11 @@ GitHub Actions has its own secret store; it can't read Vercel's
 environment variables, so the same values need entering a second time.
 Go to your repo on GitHub → **Settings** (the repo's own settings tab, not
 your account's) → **Secrets and variables** → **Actions** → **New
-repository secret**, and add both, using the same values already in
+repository secret**, and add all three, using the same values already in
 Vercel:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-
-(`POKEMON_TCG_API_KEY` is no longer needed here since the sync script
-moved to TCGdex, which is unauthenticated. If you added it as a secret
-before this migration, it's safe to delete — nothing reads it anymore.)
+- `POKEMON_TCG_API_KEY`
 
 These are encrypted, redacted from workflow logs automatically, and never
 appear in any committed file — this is the whole reason to use GitHub's
@@ -339,9 +336,9 @@ likely to encounter them:
   wait for the weekly schedule.
 
 - **The sync workflow fails with "Missing required environment variable"**
-  — one of the two GitHub Actions secrets (`NEXT_PUBLIC_SUPABASE_URL`,
-  `SUPABASE_SERVICE_ROLE_KEY`) hasn't been added to the repo's own secret
-  store yet. These are separate from Vercel's
+  — one of the three GitHub Actions secrets (`NEXT_PUBLIC_SUPABASE_URL`,
+  `SUPABASE_SERVICE_ROLE_KEY`, `POKEMON_TCG_API_KEY`) hasn't been added to
+  the repo's own secret store yet. These are separate from Vercel's
   environment variables — GitHub Actions can't read those — so the same
   values need entering a second time in GitHub's own Settings → Secrets
   and variables → Actions.

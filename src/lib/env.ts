@@ -20,11 +20,9 @@ const serverEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, {
     message: "SUPABASE_SERVICE_ROLE_KEY is required (server-only, never expose to the client)",
   }),
-  // No longer required at runtime: the app's live-fallback path now uses
-  // TCGdex (no API key needed). Kept optional, not deleted outright, in
-  // case the pokemontcg.io adapter (src/lib/providers/pokemon-tcg-api.ts)
-  // is ever reinstated as a secondary fallback.
-  POKEMON_TCG_API_KEY: z.string().optional(),
+  POKEMON_TCG_API_KEY: z.string().min(1, {
+    message: "POKEMON_TCG_API_KEY is required",
+  }),
   AI_PROVIDER: z.enum(["anthropic", "openai"], {
     errorMap: () => ({ message: 'AI_PROVIDER must be either "anthropic" or "openai"' }),
   }),

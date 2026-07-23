@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { tcgdexApiProvider, TcgdexApiError } from "@/lib/providers/tcgdex-api";
+import { pokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api";
 import { getLocalSets, upsertSets } from "@/lib/cards/local-card-repository";
 import { withApiErrorHandling } from "@/lib/api/with-error-handling";
 import type { ApiError } from "@/types/api";
@@ -14,11 +14,11 @@ export const GET = withApiErrorHandling(async () => {
   // right after this feature was first deployed). Fall back to a live
   // fetch so the app isn't stuck with an empty set list in the meantime.
   try {
-    const sets = await tcgdexApiProvider.getSets();
+    const sets = await pokemonTcgApiProvider.getSets();
     await upsertSets(sets);
     return NextResponse.json({ sets });
   } catch (error) {
-    if (error instanceof TcgdexApiError) {
+    if (error instanceof PokemonTcgApiError) {
       const body: ApiError = {
         error: {
           code: "PROVIDER_UNAVAILABLE",

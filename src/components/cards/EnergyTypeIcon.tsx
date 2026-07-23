@@ -1,33 +1,29 @@
 /**
  * Small circular badge representing a Pokémon elemental (energy) type.
- *
- * Renders the icon set supplied in public/energy-icons/ (added at the
- * user's request, replacing the original abstract letterform badges).
- * File names use the app's own type vocabulary, which matches TCGdex's
- * `Types` union exactly (Colorless/Darkness/Dragon/Fairy/Fighting/Fire/
- * Grass/Lightning/Metal/Psychic/Water) — no per-type mapping table is
- * needed beyond a straightforward lowercase of the type name.
+ * Deliberately an original abstract design (color + letterform), not a
+ * reproduction of the official TCG energy symbols, which are Nintendo/The
+ * Pokémon Company IP.
  */
 import type { CSSProperties } from "react";
-import Image from "next/image";
 
-const ICON_FILE_BY_TYPE: Record<string, string> = {
-  Grass: "grass",
-  Fire: "fire",
-  Water: "water",
-  Lightning: "lightning",
-  Psychic: "psychic",
-  Fighting: "fighting",
-  Darkness: "darkness",
-  Metal: "metal",
-  Fairy: "fairy",
-  Dragon: "dragon",
-  Colorless: "colorless",
+const TYPE_STYLES: Record<string, { bg: string; fg: string; label: string }> = {
+  Grass: { bg: "#4e9a51", fg: "#ffffff", label: "G" },
+  Fire: { bg: "#e0653a", fg: "#ffffff", label: "F" },
+  Water: { bg: "#4f92d6", fg: "#ffffff", label: "W" },
+  Lightning: { bg: "#f2c94c", fg: "#3a3000", label: "L" },
+  Psychic: { bg: "#a05fc4", fg: "#ffffff", label: "P" },
+  Fighting: { bg: "#a15127", fg: "#ffffff", label: "Ft" },
+  Darkness: { bg: "#4a4459", fg: "#ffffff", label: "D" },
+  Metal: { bg: "#8e97a3", fg: "#ffffff", label: "M" },
+  Fairy: { bg: "#e58cc6", fg: "#ffffff", label: "Fy" },
+  Dragon: { bg: "#7a6a3f", fg: "#ffffff", label: "Dr" },
+  Colorless: { bg: "#d8d3c4", fg: "#4a453a", label: "C" },
 };
 
-export function energyIconSrc(type: string): string | null {
-  const file = ICON_FILE_BY_TYPE[type];
-  return file ? `/energy-icons/${file}.png` : null;
+const DEFAULT_STYLE = { bg: "#9ca3af", fg: "#ffffff", label: "?" };
+
+export function energyTypeStyle(type: string) {
+  return TYPE_STYLES[type] ?? DEFAULT_STYLE;
 }
 
 type EnergyTypeIconProps = {
@@ -39,38 +35,24 @@ type EnergyTypeIconProps = {
 };
 
 export function EnergyTypeIcon({ type, size = 20, className = "", style }: EnergyTypeIconProps) {
-  const src = energyIconSrc(type);
-
-  if (!src) {
-    // Unknown/unrecognized type string — fall back to a plain neutral
-    // badge rather than a broken image, same defensive spirit as the
-    // old DEFAULT_STYLE fallback.
-    return (
-      <span
-        role="img"
-        aria-label={`${type} energy type`}
-        title={`${type} energy type`}
-        className={`inline-flex items-center justify-center rounded-full border border-white/70 bg-gray-400 text-[0.6em] font-semibold text-white shadow-sm ${className}`}
-        style={{ width: size, height: size, ...style }}
-      >
-        ?
-      </span>
-    );
-  }
-
+  const { bg, fg, label } = energyTypeStyle(type);
   return (
     <span
-      className={`inline-block overflow-hidden rounded-full border border-white/70 shadow-sm ${className}`}
-      style={{ width: size, height: size, ...style }}
+      role="img"
+      aria-label={`${type} energy type`}
+      title={`${type} energy type`}
+      className={`inline-flex items-center justify-center rounded-full border border-white/70 font-semibold shadow-sm ${className}`}
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.max(8, size * 0.42),
+        backgroundColor: bg,
+        color: fg,
+        lineHeight: 1,
+        ...style,
+      }}
     >
-      <Image
-        src={src}
-        alt={`${type} energy type`}
-        title={`${type} energy type`}
-        width={size}
-        height={size}
-        className="h-full w-full object-cover"
-      />
+      {label}
     </span>
   );
 }

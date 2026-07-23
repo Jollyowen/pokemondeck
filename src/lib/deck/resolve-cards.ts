@@ -2,7 +2,7 @@ import "server-only";
 import type { Card } from "@/types/card";
 import type { DeckCardEntry } from "@/types/deck";
 import { getLocalCards, upsertCard } from "@/lib/cards/local-card-repository";
-import { pokemonTcgApiProvider, PokemonTcgApiError } from "@/lib/providers/pokemon-tcg-api";
+import { tcgdexApiProvider, TcgdexApiError } from "@/lib/providers/tcgdex-api";
 
 export async function resolveDeckCards(
   entries: DeckCardEntry[],
@@ -17,12 +17,12 @@ export async function resolveDeckCards(
   let fetched: Card[] = [];
   if (missingLocally.length > 0) {
     try {
-      fetched = await pokemonTcgApiProvider.getCards(missingLocally);
+      fetched = await tcgdexApiProvider.getCards(missingLocally);
       // Write back so these become local cache hits from here on, rather
       // than depending on a live fetch succeeding again on every future load.
       await Promise.all(fetched.map((c) => upsertCard(c)));
     } catch (error) {
-      if (!(error instanceof PokemonTcgApiError)) throw error;
+      if (!(error instanceof TcgdexApiError)) throw error;
       // Provider unavailable and not in the local mirror: those ids stay
       // missing, reported to the caller as CARD_NOT_FOUND rather than
       // failing the whole request, so the deck itself remains viewable/editable.

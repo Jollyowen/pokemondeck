@@ -1381,3 +1381,33 @@ Last of three staged groups from the five-part UI/UX batch (item 5 of 5).
   `tsc`, `eslint`, all 154 unit tests, and a full production build all
   pass. Worth treating the next real CI run as the actual confirmation,
   the same way the Phase-8-era e2e fixes in this file were.
+
+## Fix: rename e2e test broke because /decks now has a second textbox
+
+- Real CI result after the previous fix: 17/18 passed. The one remaining
+  failure — `locator.fill: strict mode violation: getByRole('textbox')
+  resolved to 2 elements` — was a genuinely different bug from the batch
+  of e2e fixes just made, not a leftover of them.
+- **Root cause**: the rename test's `page.getByRole("textbox")` was never
+  scoped to begin with; it worked only because the rename input used to
+  be the only textbox on `/decks`. Batch 1 added the `<CardBrowser />`
+  search box below the deck list on that same page, which also renders a
+  `getByRole("textbox")`-matching `<input>` (`aria-label`/placeholder
+  "Card name"). Once both exist, an unqualified `getByRole("textbox")` is
+  ambiguous by construction — Playwright correctly refused to guess.
+- **Fixed in the test, not the app**: scoped to
+  `getByRole("textbox", { name: "Rename Charizard Control" })`. Unlike
+  the `SwapCardGroup` card-name bug this looks superficially similar to,
+  there was no markup gap here to fix — the rename input already had a
+  distinct, correct `aria-label`. The lesson (don't leave a locator loose
+  enough to match something it doesn't mean to) is the same; where the
+  fix belongs differs based on whether the accessible name actually
+  exists and is just not being used (this case) or genuinely doesn't
+  exist yet (the `SwapCardGroup` case).
+- Also confirmed the `[WebServer] Failed to look up shared deck by token`
+  log line seen in this CI run is expected, not a new regression — it's
+  the `reportError` logging added for the earlier migration-column bug,
+  firing because CI's Supabase env vars are placeholders so the lookup
+  genuinely errors; the endpoint still correctly falls through to its
+  "not found" response either way, and the test that log line appears
+  under passes.

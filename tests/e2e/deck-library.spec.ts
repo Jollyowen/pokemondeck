@@ -58,7 +58,14 @@ test("renaming a deck sends the new name to the server", async ({ page }) => {
   // matching on "Rename" alone still resolves to exactly one button here
   // since it's the only action whose name contains that word.
   await page.getByRole("button", { name: "Rename" }).click();
-  const input = page.getByRole("textbox");
+  // Scoped by accessible name: /decks now also renders the card-search
+  // box (added below the deck list in the batch-1 UI/UX work), so an
+  // unqualified getByRole("textbox") is ambiguous — same "don't leave a
+  // locator vague enough to match the wrong thing" lesson as the
+  // SwapCardGroup fix elsewhere in this suite, just landing on the test
+  // side here since the rename input's accessible name was already
+  // distinct and correct.
+  const input = page.getByRole("textbox", { name: "Rename Charizard Control" });
   await input.fill("New Name");
   await input.press("Enter");
 

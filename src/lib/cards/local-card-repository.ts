@@ -3,6 +3,29 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { cardToRow, rowToCard, setToRow, rowToSet, type CardRow, type SetRow } from "@/lib/cards/card-row-mapping";
 import type { Card, CardSearchInput, CardSearchResult, CardSet } from "@/types/card";
 
+/**
+ * Real Pokémon elemental type names are always a single plain word
+ * (Fire, Water, Colorless, ...) — this is deliberately conservative, not
+ * an exhaustive type list, because it exists purely as a filter-injection
+ * guard, not a validity check. `pokemonType` reaches here as free-form
+ * user input (the API schema only caps its length, since the UI's own
+ * dropdown is what normally constrains it — a direct API caller isn't
+ * bound by that dropdown), and until this check existed it was
+ * interpolated straight into a raw PostgREST `.or()` filter-syntax
+ * string below. A value containing PostgREST-meaningful characters
+ * (`,`, `(`, `)`, `{`, `}`, `"`) could break out of the intended filter
+ * or alter its logic. Anything that doesn't match this pattern simply
+ * falls back to the plain, safely-parameterized `.contains()` filter
+ * used for every other supertype — never rejected outright, since an
+ * odd value should just fail to match rather than error the request.
+ */
+const SAFE_ENERGY_TYPE_WORD = /^[A-Za-z]+$/;
+
+/** Exported purely so this guard is directly unit-testable without exercising the Supabase-calling search function around it. */
+export function isSafeEnergyTypeWord(value: string): boolean {
+  return SAFE_ENERGY_TYPE_WORD.test(value);
+}
+
 export async function searchLocalCards(input: CardSearchInput): Promise<CardSearchResult> {
   const supabase = getSupabaseServerClient();
   const page = input.page ?? 1;
@@ -19,7 +42,7 @@ export async function searchLocalCards(input: CardSearchInput): Promise<CardSear
   if (input.supertype) query = query.eq("supertype", input.supertype);
   if (input.pokemonType?.trim()) {
     const type = input.pokemonType.trim();
-    if (input.supertype === "Energy") {
+    if (input.supertype === "Energy" && isSafeEnergyTypeWord(type)) {
       // Many Basic/Special Energy cards have an EMPTY `types` array in
       // the underlying card data — confirmed from a real search result:
       // a "Basic Water Energy" printing (sve-3) with types: [], even

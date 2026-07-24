@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeDeckValidation, getSpecialSameNameCopyLimit, isBasicEnergy } from "@/lib/deck/validate";
+import { computeDeckValidation, getSpecialSameNameCopyLimit, isBasicEnergy, resolveDisplayTypes } from "@/lib/deck/validate";
 import type { Card } from "@/types/card";
 import type { DeckCardEntry } from "@/types/deck";
 
@@ -243,5 +243,47 @@ describe("getSpecialSameNameCopyLimit", () => {
     expect(
       getSpecialSameNameCopyLimit({ rules: ["You can't have more than 1 copy of this card in your deck."] }),
     ).toBe(1);
+  });
+});
+
+describe("resolveDisplayTypes", () => {
+  // Regression coverage for the bug where CardImageModal, DeckCardList,
+  // and the print page read card.types directly with no fallback at
+  // all — silently showing no type icon for almost every real Energy
+  // card, since TCGdex leaves `types` empty for most of them. This is
+  // the same fallback already used by review-cards.ts/statistics.ts/
+  // deck-quality.ts/candidate-pool-summary.ts, now consolidated here.
+
+  it("passes through card.types unchanged for a Pokémon card", () => {
+    expect(
+      resolveDisplayTypes({ supertype: "Pokémon", name: "Charizard", types: ["Fire", "Flying"] }),
+    ).toEqual(["Fire", "Flying"]);
+  });
+
+  it("passes through card.types unchanged for an Energy card when it's actually populated", () => {
+    expect(
+      resolveDisplayTypes({ supertype: "Energy", name: "Water Energy", types: ["Water"] }),
+    ).toEqual(["Water"]);
+  });
+
+  it("infers the type from the name for a Basic Energy card whose types is empty (real TCGdex shape)", () => {
+    expect(
+      resolveDisplayTypes({ supertype: "Energy", name: "Fire Energy", types: [] }),
+    ).toEqual(["Fire"]);
+    expect(
+      resolveDisplayTypes({ supertype: "Energy", name: "Basic Psychic Energy", types: [] }),
+    ).toEqual(["Psychic"]);
+  });
+
+  it("leaves types empty for a Special Energy card with no inferable type", () => {
+    expect(
+      resolveDisplayTypes({ supertype: "Energy", name: "Double Turbo Energy", types: [] }),
+    ).toEqual([]);
+  });
+
+  it("leaves types empty for a Trainer card (nothing to infer for a non-Energy, non-typed card)", () => {
+    expect(
+      resolveDisplayTypes({ supertype: "Trainer", name: "Ultra Ball", types: [] }),
+    ).toEqual([]);
   });
 });

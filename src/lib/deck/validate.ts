@@ -110,6 +110,34 @@ export function isBasicPokemon(card: Pick<Card, "supertype" | "subtypes">): bool
   return card.supertype === "Pokémon" && card.subtypes.includes("Basic");
 }
 
+/**
+ * The single, shared source of truth for "which elemental type icon(s)
+ * should this card show" — used for both AI-facing data (review payload)
+ * and on-screen display (card overlay, deck list, print page).
+ *
+ * `card.types` alone is reliable for Pokémon but empty for most real
+ * Basic Energy cards from TCGdex (see isBasicEnergy's doc comment above),
+ * so this falls back to `inferBasicEnergyType` for Energy cards whose
+ * `types` is empty. Non-Energy cards with an empty `types` (e.g.
+ * Trainers, or a Pokémon the provider genuinely has no type data for)
+ * correctly resolve to an empty array — there's nothing to infer from a
+ * name for those.
+ *
+ * Before this helper existed, several call sites each carried their own
+ * ad-hoc copy of this same fallback (review-cards.ts, statistics.ts,
+ * deck-quality.ts, candidate-pool-summary.ts), and three UI components
+ * (CardImageModal, DeckCardList, the print page) read `card.types`
+ * directly with no fallback at all — silently showing no type icon for
+ * almost every Energy card. This consolidates all of them into one
+ * implementation so a future fix only needs to happen once.
+ */
+export function resolveDisplayTypes(card: Pick<Card, "types" | "name" | "supertype">): string[] {
+  if (card.types.length > 0) return card.types;
+  if (card.supertype !== "Energy") return card.types;
+  const inferred = inferBasicEnergyType(card);
+  return inferred ? [inferred] : [];
+}
+
 const CONSTRUCTION_BLOCKING_CODES: DeckValidationIssue["code"][] = [
   "TOO_MANY_CARDS",
   "COPY_LIMIT_EXCEEDED",

@@ -3,10 +3,12 @@
 import { useEffect, useRef } from "react";
 import type { Card } from "@/types/card";
 import { EnergyTypeStack } from "@/components/cards/EnergyTypeIcon";
+import { resolveDisplayTypes } from "@/lib/deck/validate";
 
 export function CardImageModal({ card, onClose }: { card: Card; onClose: () => void }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedElement = useRef<Element | null>(null);
+  const displayTypes = resolveDisplayTypes(card);
 
   useEffect(() => {
     previouslyFocusedElement.current = document.activeElement;
@@ -52,9 +54,9 @@ export function CardImageModal({ card, onClose }: { card: Card; onClose: () => v
             <p className="font-medium truncate">{card.name}</p>
             <p className="text-xs text-neutral-500 truncate">Set: {card.setName}</p>
           </div>
-          {card.types.length > 0 && (
+          {displayTypes.length > 0 && (
             <div className="shrink-0">
-              <EnergyTypeStack types={card.types} size={22} />
+              <EnergyTypeStack types={displayTypes} size={22} />
             </div>
           )}
         </div>

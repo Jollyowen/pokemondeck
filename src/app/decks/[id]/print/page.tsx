@@ -11,6 +11,7 @@ import {
   type EvolutionGroupNode,
 } from "@/lib/deck/deck-card-grouping";
 import { EnergyTypeStack } from "@/components/cards/EnergyTypeIcon";
+import { resolveDisplayTypes } from "@/lib/deck/validate";
 
 /** Walks an evolution-line tree depth-first (Basic first, then its evolutions), same visual order as the deck editor. */
 function flattenEvolutionTree(nodes: EvolutionGroupNode[]): DeckCardEntry[] {
@@ -176,10 +177,11 @@ function PrintListSection({
       <ul className="text-sm divide-y divide-neutral-100">
         {entries.map((entry) => {
           const card = knownCards[entry.cardId];
+          const displayTypes = card ? resolveDisplayTypes(card) : [];
           return (
             <li key={entry.cardId} className="flex items-center gap-2 py-1 break-inside-avoid">
               <span className="w-6 shrink-0 tabular-nums text-neutral-500">{entry.quantity}×</span>
-              {card && card.types.length > 0 && <EnergyTypeStack types={card.types} size={14} />}
+              {displayTypes.length > 0 && <EnergyTypeStack types={displayTypes} size={14} />}
               <span className="flex-1 min-w-0 truncate">{entry.cardName}</span>
               {card && <span className="shrink-0 text-neutral-400 text-xs">{card.setName}</span>}
               {!card && <span className="shrink-0 text-amber-600 text-xs">Not found in catalogue</span>}

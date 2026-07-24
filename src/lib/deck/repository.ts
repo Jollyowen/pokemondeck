@@ -140,7 +140,7 @@ export async function updateOwnedDeck(
   if (patch.strategyNotes !== undefined) deckPatch.strategy_notes = patch.strategyNotes;
   if (patch.mainPokemonCardId !== undefined) deckPatch.main_pokemon_card_id = patch.mainPokemonCardId;
 
-  await supabase.from("decks").update(deckPatch).eq("id", deckId);
+  await supabase.from("decks").update(deckPatch).eq("id", deckId).eq("owner_id", ownerId);
 
   if (patch.cards !== undefined) {
     // Replace strategy: simplest way to keep deck_cards in sync with a

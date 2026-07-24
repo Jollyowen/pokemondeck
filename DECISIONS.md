@@ -1653,3 +1653,91 @@ Last of three staged groups from the five-part UI/UX batch (item 5 of 5).
   still read `card.types` directly for icon display — logged as a
   follow-up in an earlier entry, not addressed in this pass since it's a
   cosmetic gap rather than a scoring/data-correctness one.
+
+## Code audit: closed the open Energy-type-icon display gap, found and fixed a filter-injection issue
+
+General code audit requested — not triggered by a specific bug report.
+Read the actual shipped codebase (not just the brief docs, which turned
+out to be stale relative to this file — the project's copy of
+`DECISIONS.md` was ~500 lines behind the one in the repo, missing the
+whole TCGdex migration and UI/UX redesign). Baseline before touching
+anything: `tsc --noEmit`, `eslint`, and `vitest run` all clean (177/177
+tests). Findings and fixes:
+
+- **Fixed the open gap flagged in the entry directly above.**
+  `CardImageModal`, `DeckCardList`, and the print page all read
+  `card.types` directly with no fallback, so they silently showed no
+  type icon for almost every real Energy card (TCGdex leaves `types`
+  empty for most of them) — on screen and on printed decklists. Four
+  other call sites (`review-cards.ts`, `statistics.ts`, `deck-quality.ts`,
+  `candidate-pool-summary.ts`) already had their own ad-hoc copy of the
+  same name-inference fallback. Consolidated all of it into one new
+  exported helper, `resolveDisplayTypes` in `validate.ts`, and wired the
+  three broken components to use it. Left the four already-fixed,
+  already-tested call sites as-is rather than risk a behavior change for
+  a DRY-ness-only win. Added a dedicated `resolveDisplayTypes` test suite
+  (5 cases) rather than only relying on the indirect coverage the other
+  four sites already had.
+- **Found and fixed a real filter-injection gap in `searchLocalCards`.**
+  The Energy-type broadened-match fix (`types.cs.{type},name.ilike.%type%`)
+  interpolates `pokemonType` directly into a raw PostgREST `.or()`
+  filter-syntax string. `pokemonType` is free-form at the API boundary —
+  the Zod schema only caps its length; the UI's own dropdown is what
+  normally constrains it, but a direct API caller isn't bound by that.
+  A value containing PostgREST-meaningful characters (`,`, `(`, `)`,
+  `{`, `}`, `"`) could break out of the intended filter or alter its
+  logic. Blast radius was already bounded (this only ever touches the
+  `cards` table, which is entirely public data with no per-owner
+  scoping), but it's still the kind of raw-string-interpolation pattern
+  that shouldn't exist regardless of current radius, and a future reuse
+  of the same pattern against owner-scoped data would be a real problem.
+  Fixed by adding `isSafeEnergyTypeWord` — real elemental type names are
+  always a single plain word (Fire, Water, Colorless, ...), so the
+  broadened-match branch now only fires when the input actually looks
+  like one; anything else falls back to the plain, safely-parameterized
+  `.contains()` filter already used for every other supertype, rather
+  than being rejected outright. Exported the predicate specifically so
+  it's directly unit-testable (3 new tests) without needing to exercise
+  the Supabase-calling function around it — consistent with this
+  codebase's existing boundary of not unit-testing real network I/O
+  directly.
+- **Hardened `updateOwnedDeck` for consistency, not because of a found
+  exploit.** Its actual `UPDATE` statement filtered only on `id`,
+  relying on a preceding ownership `SELECT` to have already confirmed
+  the deck belongs to `ownerId`. Not exploitable in practice — deck
+  ownership is set once at creation and never transferred, so there's no
+  realistic race between the check and the write — but it was the one
+  mutation in `repository.ts` that didn't double-scope its own write by
+  `owner_id` directly, unlike every sibling function
+  (`softDeleteOwnedDeck`, `restoreOwnedDeck`, `enableSharing`,
+  `revokeSharing`). Added `.eq("owner_id", ownerId)` to the `UPDATE`
+  itself to match the established pattern.
+- Checked and did NOT change, with reasoning:
+  - `with-error-handling.ts` returns the raw `error.message` to the
+    client on any unhandled 500. This is a deliberate, already-documented
+    tradeoff (see the Post-Phase-3 fix entry above) made specifically to
+    fix bare, bodyless 500s that were hard to debug from the client
+    console. Worth someone's explicit call on whether to keep it as-is
+    for a personal project vs. return a generic message and rely solely
+    on `reportError`'s server-side logging — not changed unilaterally
+    here since it reverses a deliberate prior decision, not an oversight.
+  - General request throttling on card search (`/api/cards`) — flagged
+    as deferred to "Phase 8 hardening" back in Phase 7 and never actually
+    picked up. Less urgent now than when flagged (search reads a local,
+    indexed table instead of hitting a rate-limited third party), but
+    the endpoint is still unauthenticated and publicly reachable. Left
+    as a known open item rather than guessing at a rate-limiting
+    mechanism the person hasn't chosen.
+  - Re-audited every remaining `card.types` / `subtypes.includes("Basic")`
+    site in the codebase (not just the three fixed here) to confirm
+    nothing else was missed — the two remaining raw `subtypes.includes
+    ("Basic")` checks are both correctly Pokémon-scoped (`isBasicPokemon`,
+    `statistics.ts`'s evolution-stage tally), already confirmed unaffected
+    in the entry above.
+  - The AI Deck Assist redesign's manual composition override (brief
+    section 5b) is still not built — confirmed via a repo-wide grep, not
+    assumed. Unchanged status from when it was originally flagged as a
+    deliberate follow-up, not forgotten.
+- Verified: `tsc --noEmit` clean, `eslint` clean (0 warnings), 185 unit
+  tests pass (177 previous + 8 new), and a full production build
+  succeeds.

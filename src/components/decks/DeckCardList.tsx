@@ -7,6 +7,7 @@ import { isCardLegalInFormat } from "@/lib/format-legality";
 import { getEvolutionLineNames } from "@/lib/deck/evolution-line";
 import { formatCardPrice } from "@/lib/format-price";
 import { EnergyTypeStack } from "@/components/cards/EnergyTypeIcon";
+import { resolveDisplayTypes } from "@/lib/deck/validate";
 import { EvolutionLineSuggestions } from "@/components/decks/EvolutionLineSuggestions";
 import {
   groupPokemonByEvolutionLine,
@@ -32,6 +33,7 @@ function DeckCardRow({ entry, ...props }: { entry: DeckCardEntry } & SharedRowPr
   const card = cardsById[entry.cardId];
   const legal = card ? isCardLegalInFormat(card, format) : true;
   const evolutionNames = card ? getEvolutionLineNames(card) : [];
+  const displayTypes = card ? resolveDisplayTypes(card) : [];
   const isExpanded = expandedCardId === entry.cardId;
   const price = card ? formatCardPrice(card.price) : null;
 
@@ -70,7 +72,7 @@ function DeckCardRow({ entry, ...props }: { entry: DeckCardEntry } & SharedRowPr
                 tacked onto the end of the old line, for the same reason.
               */}
               <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                {card.types.length > 0 && <EnergyTypeStack types={card.types} size={14} />}
+                {displayTypes.length > 0 && <EnergyTypeStack types={displayTypes} size={14} />}
                 {card.rarity && (
                   <span className="whitespace-nowrap rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600">
                     {card.rarity}

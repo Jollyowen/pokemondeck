@@ -155,7 +155,7 @@ export default function DeckLibraryPage() {
           </label>
           <select
             id="sort"
-            className="min-h-11 rounded-md border border-line-strong px-2 text-sm"
+            className="min-h-11 rounded-md border border-line-strong bg-surface text-ink px-2 text-sm"
             value={sort}
             onChange={(e) => setSort(e.target.value as SortBy)}
           >
@@ -199,7 +199,7 @@ export default function DeckLibraryPage() {
                     <input
                       autoFocus
                       aria-label={`Rename ${deck.name}`}
-                      className="min-h-11 w-full min-w-0 rounded-md border border-line-strong px-2 text-sm font-medium"
+                      className="min-h-11 w-full min-w-0 rounded-md border border-line-strong bg-surface text-ink px-2 text-sm font-medium"
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
                       onBlur={() => handleRenameSubmit(deck.id)}

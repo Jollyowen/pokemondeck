@@ -94,7 +94,7 @@ export function AiDeckGeneratorForm() {
           type="text"
           required
           autoComplete="off"
-          className="min-h-11 w-full rounded-md border border-line-strong px-3 text-sm"
+          className="min-h-11 w-full rounded-md border border-line-strong bg-surface text-ink placeholder:text-ink-muted px-3 text-sm"
           placeholder="e.g. Charizard"
           value={pokemonName}
           onChange={(e) => {
@@ -133,7 +133,7 @@ export function AiDeckGeneratorForm() {
           id="generate-strategy"
           value={strategyArchetype}
           onChange={(e) => setStrategyArchetype(e.target.value as StrategyArchetype | "")}
-          className="min-h-11 w-full rounded-md border border-line-strong px-2 text-sm"
+          className="min-h-11 w-full rounded-md border border-line-strong bg-surface text-ink px-2 text-sm"
         >
           <option value="">Let the AI decide</option>
           <option value="aggro">Aggro / Beatdown</option>
@@ -150,7 +150,7 @@ export function AiDeckGeneratorForm() {
         <input
           id="generate-notes"
           type="text"
-          className="min-h-11 w-full rounded-md border border-line-strong px-3 text-sm"
+          className="min-h-11 w-full rounded-md border border-line-strong bg-surface text-ink placeholder:text-ink-muted px-3 text-sm"
           placeholder='e.g. "focused on early pressure, keep it budget-friendly"'
           value={strategyNotes}
           onChange={(e) => setStrategyNotes(e.target.value)}

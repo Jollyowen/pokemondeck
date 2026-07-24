@@ -37,7 +37,7 @@ const COMMON_RARITIES = [
 ];
 
 const inputClass =
-  "min-h-11 w-full rounded-md border border-line-strong px-3 text-sm focus:outline-none focus:ring-2 focus:ring-line-stronger";
+  "min-h-11 w-full rounded-md border border-line-strong bg-surface text-ink placeholder:text-ink-muted px-3 text-sm focus:outline-none focus:ring-2 focus:ring-line-stronger";
 
 export function CardSearchFilters({
   value,

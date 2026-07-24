@@ -86,7 +86,7 @@ export default function NewDeckPage() {
             <input
               id="deck-name"
               type="text"
-              className="min-h-11 w-full rounded-md border border-line-strong px-3 text-sm"
+              className="min-h-11 w-full rounded-md border border-line-strong bg-surface text-ink placeholder:text-ink-muted px-3 text-sm"
               placeholder="e.g. Charizard ex Control"
               value={name}
               onChange={(e) => setName(e.target.value)}

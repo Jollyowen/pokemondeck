@@ -110,7 +110,7 @@ export function ShareDeckPanel({
               readOnly
               aria-label="Shareable deck link"
               value={shareUrl}
-              className="min-h-11 flex-1 min-w-[220px] rounded-md border border-line-strong px-2 text-sm"
+              className="min-h-11 flex-1 min-w-[220px] rounded-md border border-line-strong bg-surface text-ink px-2 text-sm"
               onFocus={(e) => e.target.select()}
             />
             <button

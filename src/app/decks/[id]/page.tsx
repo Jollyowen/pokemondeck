@@ -390,14 +390,14 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             onChange={(e) => setName(e.target.value)}
             onBlur={handleNameBlur}
             aria-label="Deck name"
-            className="text-2xl font-semibold w-full border-b border-transparent hover:border-line-strong focus:border-line-stronger focus:outline-none"
+            className="text-2xl font-semibold w-full bg-transparent text-ink border-b border-transparent hover:border-line-strong focus:border-line-stronger focus:outline-none"
             maxLength={100}
           />
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <select
               value={strategyArchetype}
               onChange={(e) => handleStrategyArchetypeChange(e.target.value as StrategyArchetype | "")}
-              className="min-h-11 rounded-md border border-line-strong px-2 text-sm text-ink-secondary"
+              className="min-h-11 rounded-md border border-line-strong bg-surface px-2 text-sm text-ink-secondary"
               aria-label="Deck strategy archetype"
             >
               <option value="">Strategy (optional)</option>
@@ -409,7 +409,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             <select
               value={mainPokemonCardId ?? ""}
               onChange={(e) => handleMainPokemonChange(e.target.value)}
-              className="min-h-11 rounded-md border border-line-strong px-2 text-sm text-ink-secondary"
+              className="min-h-11 rounded-md border border-line-strong bg-surface px-2 text-sm text-ink-secondary"
               aria-label="Main Pokémon for this deck's thumbnail"
             >
               <option value="">Main Pokémon (for thumbnail)</option>
@@ -426,7 +426,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             onBlur={handleStrategyNotesBlur}
             aria-label="Deck strategy notes"
             placeholder={'Extra detail (optional) — e.g. "focused on early Charizard pressure"'}
-            className="mt-1 text-sm w-full text-ink-secondary border-b border-transparent hover:border-line-strong focus:border-line-stronger focus:outline-none placeholder:text-ink-muted"
+            className="mt-1 text-sm w-full bg-transparent text-ink-secondary border-b border-transparent hover:border-line-strong focus:border-line-stronger focus:outline-none placeholder:text-ink-muted"
             maxLength={300}
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">

@@ -8,7 +8,7 @@ import { normalizeCardName } from "@/lib/deck/normalize-name";
  * cache hash so a rules change invalidates previously cached reviews,
  * rather than serving a review computed against stale logic.
  */
-export const VALIDATION_RULES_VERSION = "1.1.0";
+export const VALIDATION_RULES_VERSION = "1.1.1";
 
 const DECK_SIZE = 60;
 const DEFAULT_COPY_LIMIT = 4;
@@ -32,27 +32,78 @@ export function getSpecialSameNameCopyLimit(card: Pick<Card, "rules">): number |
   return null;
 }
 
-const BASIC_ENERGY_NAME_PATTERN = /^Basic\s+\w+\s+Energy$/i;
+const ENERGY_TYPE_NAMES = [
+  "Grass",
+  "Fire",
+  "Water",
+  "Lightning",
+  "Psychic",
+  "Fighting",
+  "Darkness",
+  "Metal",
+  "Fairy",
+  "Dragon",
+  "Colorless",
+];
 
 /**
- * `subtypes.includes("Basic")` alone isn't reliable for Energy cards:
- * TCGdex doesn't consistently populate the `energyType` field a Basic
- * Energy card's "Basic" subtype is derived from — the same class of
- * data gap already found and fixed for `types` on Energy cards (see
- * DECISIONS.md). A real deck was flagged with "Basic Psychic Energy has
- * 17 copies, more than the 4-copy limit" as a direct result of this.
+ * Matches "Fire Energy" AND "Basic Fire Energy" — TCGdex uses both
+ * naming styles across different set eras (older sets: plain "<Type>
+ * Energy"; some newer sets: explicit "Basic <Type> Energy"), and
+ * `subtypes` doesn't reliably say "Basic" for either style.
  *
- * Fallback: every real Basic Energy card is named exactly
- * "Basic <Type> Energy" — a standard, unambiguous naming convention
- * used across the whole TCG. Real Special Energy cards (which ARE
- * correctly subject to the 4-copy limit — e.g. Double Turbo Energy,
- * Aurora Energy, Capture Energy) never start with "Basic", so this
- * pattern can't misclassify a genuine Special Energy card as exempt.
+ * Deliberately restricted to the 11 real elemental type names, not
+ * "any single word + Energy" — real Special Energy cards are also
+ * often named "<SingleWord> Energy" (Rainbow Energy, Aurora Energy,
+ * Capture Energy, Twin Energy...) and must NOT be caught by this
+ * fallback, since they're correctly subject to the 4-copy limit.
+ * Confirmed safe against every real Special Energy name seen in
+ * production data so far (Nitro Fire Energy, Heat Fire Energy, Unit
+ * Energy GrassFireWater, Blend Energy Grass Fire Psychic Darkness,
+ * Double Colorless Energy) — none of them are "<one type word> Energy"
+ * with nothing else, so the anchored pattern rejects all of them.
+ */
+const BASIC_ENERGY_NAME_PATTERN = new RegExp(
+  `^(Basic\\s+)?(${ENERGY_TYPE_NAMES.join("|")})\\s+Energy$`,
+  "i",
+);
+
+/**
+ * `subtypes.includes("Basic")` alone isn't reliable for Energy cards.
+ * Checked against a real 34-card TCGdex sample: TCGdex's actual value
+ * for a regular (non-Special) Energy card's energyType is **"Normal"**,
+ * not "Basic" — every single basic Energy card in that sample had
+ * "Normal" in subtypes, with zero exceptions, while every real Special
+ * Energy card had "Special" instead. "Basic" does still show up
+ * sometimes too (from a separate, Pokémon-oriented `stage` field that
+ * doesn't really apply to Energy cards, present inconsistently), but
+ * it's the extra signal, not the reliable one — this was the original
+ * incorrect assumption. pokemontcg.io-era data (still possible via the
+ * `provider` field) used "Basic" as its own value for the same concept,
+ * so both are checked for compatibility with either provider's rows.
  */
 export function isBasicEnergy(card: Pick<Card, "supertype" | "subtypes" | "name">): boolean {
   if (card.supertype !== "Energy") return false;
-  if (card.subtypes.includes("Basic")) return true;
+  if (card.subtypes.includes("Normal") || card.subtypes.includes("Basic")) return true;
+  // Defensive fallback for any card where even "Normal"/"Basic" is
+  // missing entirely — matches the name pattern below.
   return BASIC_ENERGY_NAME_PATTERN.test(card.name);
+}
+
+/**
+ * Best-effort elemental type for a Basic Energy card, for callers that
+ * need to know *which* type (not just "is this Basic Energy"). Prefers
+ * `card.types` when it's actually populated, but that field is empty
+ * for most Energy cards from TCGdex — see the isBasicEnergy doc comment
+ * above — so this falls back to parsing the type word out of the name
+ * itself ("Fire Energy" / "Basic Fire Energy" -> "Fire"), using the same
+ * restricted type-name list so it can't misfire on a Special Energy
+ * card's name. Returns null if no type can be determined either way.
+ */
+export function inferBasicEnergyType(card: Pick<Card, "types" | "name">): string | null {
+  if (card.types.length > 0) return card.types[0] ?? null;
+  const match = BASIC_ENERGY_NAME_PATTERN.exec(card.name);
+  return match?.[2] ?? null;
 }
 
 export function isBasicPokemon(card: Pick<Card, "supertype" | "subtypes">): boolean {

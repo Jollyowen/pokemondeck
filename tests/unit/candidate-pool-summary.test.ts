@@ -61,6 +61,24 @@ describe("buildCandidatePoolSummary", () => {
     expect(summary.energyTypesAvailable).toEqual(["Water"]);
   });
 
+  it("still detects Basic Energy types when types is empty and subtypes says \"Normal\" (real TCGdex shape)", () => {
+    // Regression test: this is the actual shape TCGdex returns for most
+    // Basic Energy cards — subtypes: ["Normal"] (not "Basic"), types: []
+    // (not populated). Both the old subtype check and a naive card.types
+    // loop would silently report zero available energy types here.
+    const fireEnergy = makeCard({
+      id: "fire-1",
+      name: "Fire Energy",
+      supertype: "Energy",
+      subtypes: ["Normal"],
+      types: [],
+    });
+    const target = makeCard({ id: "target", name: "Wailord", supertype: "Pokémon" });
+
+    const summary = buildCandidatePoolSummary([fireEnergy], target);
+    expect(summary.energyTypesAvailable).toEqual(["Fire"]);
+  });
+
   it("lists which of the target's evolution-line names are actually available", () => {
     const wailmer = makeCard({ id: "wailmer", name: "Wailmer", supertype: "Pokémon" });
     const target = makeCard({ id: "target", name: "Wailord", supertype: "Pokémon", evolvesFrom: "Wailmer" });

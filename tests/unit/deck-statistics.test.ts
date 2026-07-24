@@ -69,6 +69,18 @@ describe("computeDeckStatistics", () => {
     expect(stats.pokemonTypeDistribution).toEqual({});
   });
 
+  it("still distributes energy type counts when types is empty and subtypes says \"Normal\" (real TCGdex shape)", () => {
+    // Regression test: this is the actual shape TCGdex returns for most
+    // Basic Energy cards. Before this fix, the "Energy type breakdown"
+    // stat silently showed nothing for a deck's actual energy.
+    const cards = {
+      e1: makeCard({ id: "e1", name: "Fire Energy", supertype: "Energy", subtypes: ["Normal"], types: [] }),
+    };
+    const entries: DeckCardEntry[] = [{ cardId: "e1", cardName: "Fire Energy", quantity: 14 }];
+    const stats = computeDeckStatistics(entries, cards, "all");
+    expect(stats.energyTypeDistribution).toEqual({ Fire: 14 });
+  });
+
   it("buckets evolution stages correctly, including an 'other' bucket for unmatched subtypes", () => {
     const cards = {
       basic: makeCard({ id: "basic", name: "Charmander", subtypes: ["Basic"] }),

@@ -3,6 +3,7 @@ import type { Card, DeckFormat } from "@/types/card";
 import type { DeckCardEntry, DeckStatistics } from "@/types/deck";
 import { searchLocalCards } from "@/lib/cards/local-card-repository";
 import { getEvolutionLineNames } from "@/lib/deck/evolution-line";
+import { isBasicEnergy } from "@/lib/deck/validate";
 import { isCardLegalInFormat } from "@/lib/format-legality";
 
 const MAX_CANDIDATES = 30;
@@ -109,7 +110,7 @@ export async function gatherCandidateCards(
           pageSize: 5,
         });
         result.cards
-          .filter((c) => c.subtypes.includes("Basic"))
+          .filter(isBasicEnergy)
           .slice(0, 1)
           .forEach(addIfNew);
       } catch {
@@ -226,7 +227,7 @@ export async function gatherDeckGenerationCandidates(
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     try {
       const result = await searchLocalCards({ supertype: "Energy", pokemonType: type, pageSize: 5 });
-      result.cards.filter((c) => c.subtypes.includes("Basic")).slice(0, 1).forEach(addIfNew);
+      result.cards.filter(isBasicEnergy).slice(0, 1).forEach(addIfNew);
     } catch {
       // best-effort
     }

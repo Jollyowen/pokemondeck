@@ -2,6 +2,7 @@ import type { Card, DeckFormat } from "@/types/card";
 import type { DeckCardEntry, DeckQualityIssue, DeckQualityResult, DeckStatistics, StrategyArchetype } from "@/types/deck";
 import { getArchetypeProfile } from "@/lib/ai/archetype-profiles";
 import { normalizeCardName } from "@/lib/deck/normalize-name";
+import { inferBasicEnergyType } from "@/lib/deck/validate";
 
 const MULTI_PRIZE_SUBTYPES = ["ex", "EX", "V", "VMAX", "VSTAR", "GX"];
 
@@ -85,7 +86,18 @@ export function computeDeckQuality(
   for (const entry of entries) {
     const card = cardsById[entry.cardId];
     if (!card || card.supertype !== "Energy") continue;
-    for (const type of card.types) presentEnergyTypes.add(type);
+    // card.types is empty for most real Basic Energy cards from
+    // TCGdex — see isBasicEnergy's doc comment in validate.ts. Without
+    // this fallback, this check almost certainly false-flagged
+    // ENERGY_TYPE_MISMATCH on most generated decks regardless of
+    // whether the right Energy was actually present, since a deck's
+    // Fire Energy cards contributed nothing to presentEnergyTypes.
+    if (card.types.length > 0) {
+      for (const type of card.types) presentEnergyTypes.add(type);
+    } else {
+      const inferredType = inferBasicEnergyType(card);
+      if (inferredType) presentEnergyTypes.add(inferredType);
+    }
   }
   if (requiredEnergyTypes.size > 0) {
     const covered = [...requiredEnergyTypes].some((t) => presentEnergyTypes.has(t));

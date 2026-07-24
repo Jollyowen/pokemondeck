@@ -1,6 +1,7 @@
 import type { Card, DeckFormat } from "@/types/card";
 import type { DeckCardEntry, DeckStatistics, EvolutionStageDistribution } from "@/types/deck";
 import { isDrawSupportCard, isSearchSupportCard } from "@/lib/deck/text-heuristics";
+import { inferBasicEnergyType } from "@/lib/deck/validate";
 
 function addToDistribution(distribution: Record<string, number>, key: string, quantity: number): void {
   distribution[key] = (distribution[key] ?? 0) + quantity;
@@ -54,7 +55,18 @@ export function computeDeckStatistics(
       totalTrainer += quantity;
     } else if (card.supertype === "Energy") {
       totalEnergy += quantity;
-      for (const type of card.types) addToDistribution(energyTypeDistribution, type, quantity);
+      // card.types is empty for most real Basic Energy cards from
+      // TCGdex — see isBasicEnergy's doc comment in validate.ts. Without
+      // this fallback, the "Energy type breakdown" stat silently showed
+      // nothing for a deck's actual energy, regardless of what was in
+      // it. Prefers real type data when present (covers multi-type
+      // Special Energy correctly, if that data ever is populated).
+      if (card.types.length > 0) {
+        for (const type of card.types) addToDistribution(energyTypeDistribution, type, quantity);
+      } else {
+        const inferredType = inferBasicEnergyType(card);
+        if (inferredType) addToDistribution(energyTypeDistribution, inferredType, quantity);
+      }
     }
 
     if (isDrawSupportCard(card)) drawSupportCount += quantity;

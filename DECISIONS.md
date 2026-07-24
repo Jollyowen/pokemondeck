@@ -1572,3 +1572,84 @@ Last of three staged groups from the five-part UI/UX batch (item 5 of 5).
     deck's computed validation issues can be, and per this file's own
     stated convention, that needs to invalidate any AI review cached
     against the old logic.
+
+## Fix (2): isBasicEnergy still missed plain "<Type> Energy" names
+
+- Real report: `sve-002` "Fire Energy" (no "Basic" prefix, `subtypes:
+  ["Normal"]`) still incorrectly flagged as exceeding the 4-copy limit
+  after the first fix — which only matched the "Basic <Type> Energy"
+  naming style. A real search sample confirmed TCGdex uses BOTH styles
+  across different set eras: mostly plain "<Type> Energy" for older
+  sets, "Basic <Type> Energy" for some newer ones (e.g. `sv03-230`) —
+  and `subtypes` doesn't reliably say "Basic" for either style.
+- Broadened `BASIC_ENERGY_NAME_PATTERN` to match both, but deliberately
+  restricted the bare-word case to the 11 real elemental type names
+  (`ENERGY_TYPE_NAMES`), not "any single word + Energy" — real Special
+  Energy cards are also often named "<SingleWord> Energy" (Rainbow
+  Energy, Aurora Energy, Capture Energy, Twin Energy), and a looser
+  pattern would have wrongly exempted them. Verified against every real
+  Special Energy name found in an actual TCGdex search result (Nitro
+  Fire Energy, Heat Fire Energy, Unit Energy GrassFireWater, Blend
+  Energy Grass Fire Psychic Darkness, Double Colorless Energy) plus the
+  four single-word real Special Energy names above — none match.
+- `VALIDATION_RULES_VERSION` bumped to `1.1.1`.
+- **Follow-up flagged, not yet fixed**: `types: []` is empty for every
+  Energy card checked in a real 34-card sample, not just some — this
+  also means `EnergyTypeStack` (the type-icon UI) won't show an icon
+  for any Energy card, since it reads `card.types` directly. Same root
+  cause as this fix; likely wants the same name-based fallback applied
+  to icon display, not validation.
+
+## Fix: the Energy types[]/subtypes gap had spread further than the copy-limit bug
+
+- Prompted by a direct question after the copy-limit fix: audited every
+  remaining consumer of `card.types` and independent
+  `subtypes.includes("Basic")` checks across the codebase, rather than
+  assume `validate.ts` was the only place affected. Found four more real
+  bugs, all the same root cause (TCGdex's `types` array is empty and
+  `subtypes` says "Normal" not "Basic" for most real Energy cards):
+  1. **`candidate-cards.ts`** (both AI review's and AI generation's
+     candidate gathering) — each had its own `.filter((c) =>
+     c.subtypes.includes("Basic"))` *after* an already-correctly-filtered
+     search, silently discarding almost every real Basic Energy result.
+     Both now use the shared `isBasicEnergy`.
+  2. **`candidate-pool-summary.ts`** — two compounding bugs at once: the
+     same subtype check, *and* a `for (const type of card.types)` loop
+     that had nothing to iterate even if the subtype check passed. Fed
+     into the AI deck generation redesign's Strategy Plan prompt, which
+     almost certainly always saw `energyTypesAvailable: []` regardless
+     of the real candidate pool.
+  3. **`deck-quality.ts`'s `ENERGY_TYPE_MISMATCH` hard check** — the
+     most serious of the four: this is one of the 7 hard quality checks
+     from the AI Deck Assist redesign, and it almost certainly
+     false-flagged nearly every generated deck as missing energy types
+     it actually had, since `presentEnergyTypes` was built the same
+     broken way. Given a hard-check failure triggers the one bounded
+     refinement pass, this was likely burning real AI-call budget on
+     spurious refinements.
+  4. **`statistics.ts`'s `energyTypeDistribution`** — the deck editor's
+     own "Energy type breakdown" stat, a core original-brief feature,
+     was silently showing nothing for a deck's actual energy makeup.
+  5. **`review-cards.ts`'s `toDeckReviewCard`** — sent `types: []` to
+     the AI review model for a card literally named "Fire Energy,"
+     leaving the model to infer type from the name unassisted rather
+     than the app supplying it reliably.
+- Added a new shared, exported helper — `inferBasicEnergyType` in
+  `validate.ts` — reusing the same name-parsing logic and restricted
+  type-name list as `isBasicEnergy`, so every one of these fixes shares
+  one implementation rather than five separate ad-hoc parsers. Each site
+  prefers real `card.types` data when present (correctly handles
+  multi-type Special Energy on the rare case that data exists) and only
+  falls back to name inference when `types` is empty.
+- Confirmed NOT affected, checked explicitly rather than assumed: the
+  Pokémon evolution-stage checks in `statistics.ts`/`validate.ts`'s
+  `isBasicPokemon` (a different, correctly-documented `stage` field,
+  confirmed against TCGdex's own reference docs), `repository.ts`'s
+  deck-library energy-icon computation (explicitly Pokémon-scoped
+  already), and `deck-card-grouping.ts`'s Trainer-subtype checks
+  (different card category, no evidence of the same issue).
+- Still open, unchanged from before: `EnergyTypeIcon`/`EnergyTypeStack`
+  in `CardImageModal.tsx`, `DeckCardList.tsx`, and the deck print page
+  still read `card.types` directly for icon display — logged as a
+  follow-up in an earlier entry, not addressed in this pass since it's a
+  cosmetic gap rather than a scoring/data-correctness one.

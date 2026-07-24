@@ -154,6 +154,38 @@ describe("computeDeckQuality — hard checks", () => {
     expect(result.issues.some((i) => i.code === "ENERGY_TYPE_MISMATCH")).toBe(true);
   });
 
+  it("does not flag energy type mismatch when types is empty and subtypes says \"Normal\" (real TCGdex shape)", () => {
+    // Regression test: this is the actual shape TCGdex returns for most
+    // Basic Energy cards — subtypes: ["Normal"] (not "Basic"), types: []
+    // (not populated). Before this fix, this scenario ALWAYS false-
+    // flagged ENERGY_TYPE_MISMATCH regardless of what energy was
+    // actually in the deck, since presentEnergyTypes never had anything
+    // added to it.
+    const fireAttacker = makeCard({
+      id: "fireAttacker",
+      name: "Charizard",
+      supertype: "Pokémon",
+      subtypes: ["Basic"],
+      types: ["Fire"],
+      attacks: [{ name: "Flame Burst", cost: ["Fire", "Fire"], convertedEnergyCost: 2, damage: "90", text: "" }],
+    });
+    const fireEnergy = makeCard({
+      id: "fireEnergy",
+      name: "Fire Energy",
+      supertype: "Energy",
+      subtypes: ["Normal"],
+      types: [],
+    });
+    const entries: DeckCardEntry[] = [
+      { cardId: "fireAttacker", cardName: "Charizard", quantity: 17 },
+      { cardId: "fireEnergy", cardName: "Fire Energy", quantity: 10 },
+    ];
+    const cardsById = { fireAttacker, fireEnergy };
+    const statistics = computeDeckStatistics(entries, cardsById, "all");
+    const result = computeDeckQuality(entries, cardsById, statistics, "other", "all");
+    expect(result.issues.some((i) => i.code === "ENERGY_TYPE_MISMATCH")).toBe(false);
+  });
+
   it("does not flag energy type mismatch when only Colorless cost is required", () => {
     const colorlessAttacker = makeCard({
       id: "colorlessAttacker",

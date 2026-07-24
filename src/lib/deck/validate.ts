@@ -8,7 +8,7 @@ import { normalizeCardName } from "@/lib/deck/normalize-name";
  * cache hash so a rules change invalidates previously cached reviews,
  * rather than serving a review computed against stale logic.
  */
-export const VALIDATION_RULES_VERSION = "1.0.0";
+export const VALIDATION_RULES_VERSION = "1.1.0";
 
 const DECK_SIZE = 60;
 const DEFAULT_COPY_LIMIT = 4;
@@ -32,8 +32,27 @@ export function getSpecialSameNameCopyLimit(card: Pick<Card, "rules">): number |
   return null;
 }
 
-export function isBasicEnergy(card: Pick<Card, "supertype" | "subtypes">): boolean {
-  return card.supertype === "Energy" && card.subtypes.includes("Basic");
+const BASIC_ENERGY_NAME_PATTERN = /^Basic\s+\w+\s+Energy$/i;
+
+/**
+ * `subtypes.includes("Basic")` alone isn't reliable for Energy cards:
+ * TCGdex doesn't consistently populate the `energyType` field a Basic
+ * Energy card's "Basic" subtype is derived from — the same class of
+ * data gap already found and fixed for `types` on Energy cards (see
+ * DECISIONS.md). A real deck was flagged with "Basic Psychic Energy has
+ * 17 copies, more than the 4-copy limit" as a direct result of this.
+ *
+ * Fallback: every real Basic Energy card is named exactly
+ * "Basic <Type> Energy" — a standard, unambiguous naming convention
+ * used across the whole TCG. Real Special Energy cards (which ARE
+ * correctly subject to the 4-copy limit — e.g. Double Turbo Energy,
+ * Aurora Energy, Capture Energy) never start with "Basic", so this
+ * pattern can't misclassify a genuine Special Energy card as exempt.
+ */
+export function isBasicEnergy(card: Pick<Card, "supertype" | "subtypes" | "name">): boolean {
+  if (card.supertype !== "Energy") return false;
+  if (card.subtypes.includes("Basic")) return true;
+  return BASIC_ENERGY_NAME_PATTERN.test(card.name);
 }
 
 export function isBasicPokemon(card: Pick<Card, "supertype" | "subtypes">): boolean {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeDeckValidation, getSpecialSameNameCopyLimit } from "@/lib/deck/validate";
+import { computeDeckValidation, getSpecialSameNameCopyLimit, isBasicEnergy } from "@/lib/deck/validate";
 import type { Card } from "@/types/card";
 import type { DeckCardEntry } from "@/types/deck";
 
@@ -66,6 +66,43 @@ describe("computeDeckValidation — valid fixtures", () => {
     const result = computeDeckValidation(entries, cardsById, [], "standard");
     const copyIssues = result.issues.filter((i) => i.code === "COPY_LIMIT_EXCEEDED");
     expect(copyIssues).toHaveLength(0);
+  });
+
+  it("allows more than 4 copies of Basic Energy even when subtypes is empty (name fallback)", () => {
+    // Regression test: TCGdex doesn't reliably populate the field
+    // "Basic" subtype normally comes from for Energy cards — a real
+    // deck was flagged with "Basic Psychic Energy has 17 copies" as a
+    // direct result of this gap. subtypes: [] here simulates that gap.
+    const basicPokemon = makeCard({ id: "basic-1", name: "Pikachu", supertype: "Pokémon", subtypes: ["Basic"] });
+    const energy = makeCard({ id: "energy-1", name: "Basic Psychic Energy", supertype: "Energy", subtypes: [] });
+    const entries: DeckCardEntry[] = [
+      { cardId: "basic-1", cardName: "Pikachu", quantity: 4 },
+      { cardId: "energy-1", cardName: "Basic Psychic Energy", quantity: 17 },
+    ];
+    const cardsById = { "basic-1": basicPokemon, "energy-1": energy };
+    const result = computeDeckValidation(entries, cardsById, [], "standard");
+    expect(result.issues.filter((i) => i.code === "COPY_LIMIT_EXCEEDED")).toHaveLength(0);
+  });
+
+  it("does NOT exempt a real Special Energy card just because subtypes is empty", () => {
+    // Guards the fix above from over-matching: a genuine Special Energy
+    // card (still correctly subject to the 4-copy limit) must not be
+    // swept in just because it also has an empty subtypes array — the
+    // name-pattern fallback is specific to "Basic <Type> Energy", which
+    // "Double Turbo Energy" doesn't match.
+    expect(
+      isBasicEnergy({ supertype: "Energy", subtypes: [], name: "Double Turbo Energy" }),
+    ).toBe(false);
+
+    const basicPokemon = makeCard({ id: "basic-1", name: "Pikachu", supertype: "Pokémon", subtypes: ["Basic"] });
+    const special = makeCard({ id: "special-1", name: "Double Turbo Energy", supertype: "Energy", subtypes: [] });
+    const entries: DeckCardEntry[] = [
+      { cardId: "basic-1", cardName: "Pikachu", quantity: 4 },
+      { cardId: "special-1", cardName: "Double Turbo Energy", quantity: 5 },
+    ];
+    const cardsById = { "basic-1": basicPokemon, "special-1": special };
+    const result = computeDeckValidation(entries, cardsById, [], "standard");
+    expect(result.issues.some((i) => i.code === "COPY_LIMIT_EXCEEDED")).toBe(true);
   });
 
   it("marks a deck under 60 cards as draft with a warning, not an error", () => {

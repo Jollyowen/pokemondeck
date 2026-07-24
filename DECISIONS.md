@@ -1489,3 +1489,86 @@ Last of three staged groups from the five-part UI/UX batch (item 5 of 5).
     place, in case TCGdex's own Energy-card `types` data turns out to
     be more complete and this fallback becomes redundant (harmless
     either way, just extra query complexity if so).
+
+## Bug found while investigating "duplicate sets" / suspected stale data
+
+- Started from a real user report: the `sets` table appeared to contain
+  duplicates, taken as a sign that old pokemontcg.io-era rows were still
+  sitting alongside newly-synced TCGdex rows. Investigating this
+  surfaced an actual, unrelated bug that undermines the exact evidence
+  being used to diagnose it:
+- **`rowToCard` unconditionally hardcoded `provider: "pokemon_tcg_api"`**
+  on every read from the local database, regardless of which provider
+  actually wrote that row. `CardRow` never had a `provider` column at
+  all — the field was invented at read time, not stored. This means
+  **the `provider` value in any card fetched from `/api/cards` since
+  the TCGdex migration was never reliable evidence of anything** — even
+  a card correctly overwritten by a completed TCGdex sync would still
+  report `pokemon_tcg_api`. Both example cards in the original bug
+  report showing `"provider": "pokemon_tcg_api"` do NOT prove they're
+  stale; that field was wrong unconditionally, for every row.
+- **Fixed properly**: added a real `provider` column to both `sets` and
+  `cards` (migration `0012_cards_sets_provider.sql`), threaded through
+  `cardToRow`/`rowToCard` (already available from `card.provider`, just
+  never written) and `setToRow`/`rowToSet` (new explicit `provider`
+  parameter on `setToRow`, matching the existing pattern of
+  `cardToRow(card, setReleaseDate)` taking sync-context data as an
+  explicit argument rather than inferring it).
+- **Migration default is `'unknown'`, deliberately not
+  `'pokemon_tcg_api'`**: the TCGdex migration's sync runs — even the
+  ones that later crashed on the evolvesTo pass — had already completed
+  their main per-set card upserts first, genuinely overwriting many rows
+  with real TCGdex data before the bug fixed here ever mislabeled them
+  on the next read. Defaulting to `'pokemon_tcg_api'` would have been
+  just as unproven a claim as the bug itself; `'unknown'` is the honest
+  label until a sync completes under the fixed code.
+- **This makes the original "duplicate sets" question actually
+  answerable, going forward**: after a clean sync completes under this
+  fix, any `sets`/`cards` row still marked `'unknown'` is a *provable*
+  leftover — something a TCGdex sync never touched — rather than a
+  guess. That's the right next step for confirming (or ruling out) the
+  original stale-data/duplicate-sets concern, rather than continuing to
+  read a field that was never trustworthy.
+- Added a regression test (`card-row-mapping.test.ts`) specifically
+  using `provider: "tcgdex"` — the previous test suite only ever
+  exercised `pokemon_tcg_api`, which coincidentally matched the
+  hardcoded bug and so never caught it.
+
+## Fix: image fallback consistency, and Basic Energy copy-limit false positive
+
+- **Image fallback consistency**: `CardTile` already had a labeled "No
+  image" placeholder for a missing `imageSmall`/`imageLarge`; `AddCardTile`
+  and the card detail page (`/cards/[id]`) had a blank grey box instead —
+  same situation, weaker feedback. Both now match `CardTile`'s pattern.
+  Left `DeckCardList`'s ~40px row thumbnail and `DeckStackThumbnail`
+  unchanged on purpose: the former is too small for a text label to read
+  cleanly, and the latter already has its own deliberate "empty stack"
+  look that doesn't need one.
+- **Root cause of missing images, for the record**: not a bug — TCGdex
+  genuinely doesn't have image assets for every card yet, particularly
+  very recent/minor sets (confirmed against a real example: MEE, a
+  tiny 8-card promotional Energy set released within the last few
+  months). This self-heals as TCGdex backfills assets and the weekly
+  sync picks up the update; nothing to fix in this app for that part.
+- **Fix: `isBasicEnergy` false negative causing "Basic Psychic Energy
+  has 17 copies" incorrectly flagged as exceeding the 4-copy limit.**
+  Root cause: `isBasicEnergy` required `subtypes.includes("Basic")`,
+  which depends on TCGdex's `energyType` field — the same class of gap
+  already found and fixed for `types` on Energy cards (see the earlier
+  "Energy-type search filter bug" entry) apparently also affects this
+  field for at least some Basic Energy printings.
+  - Fixed with a name-pattern fallback: every real Basic Energy card is
+    named exactly "Basic `<Type>` Energy" — a standard, unambiguous
+    convention across the whole TCG — so `isBasicEnergy` now also
+    treats an Energy-supertype card as Basic if its name matches that
+    pattern, regardless of what `subtypes` says.
+  - Deliberately name-pattern-specific, not "any Energy card mentioning
+    a type," so a genuine Special Energy card (Double Turbo Energy,
+    Aurora Energy, etc. — correctly subject to the 4-copy limit) can't
+    be swept in by the fallback. Covered by an explicit regression test
+    asserting `isBasicEnergy` returns `false` for "Double Turbo Energy"
+    even with an empty `subtypes` array.
+  - `VALIDATION_RULES_VERSION` bumped to `1.1.0` — this changes what a
+    deck's computed validation issues can be, and per this file's own
+    stated convention, that needs to invalidate any AI review cached
+    against the old logic.

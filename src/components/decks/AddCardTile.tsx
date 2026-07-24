@@ -39,7 +39,9 @@ export function AddCardTile({
           // eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image
           <img src={card.imageSmall} alt={card.name} className="w-full rounded-md" loading="lazy" />
         ) : (
-          <div className="aspect-[63/88] w-full rounded-md bg-neutral-100" />
+          <div className="aspect-[63/88] w-full rounded-md bg-neutral-100 flex items-center justify-center text-xs text-neutral-400">
+            No image
+          </div>
         )}
       </button>
       <p className="mt-1 text-xs font-medium truncate">{card.name}</p>

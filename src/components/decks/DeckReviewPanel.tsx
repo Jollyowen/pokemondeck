@@ -6,9 +6,9 @@ import type { Card } from "@/types/card";
 import type { DeckReviewResult } from "@/types/deck";
 
 const SEVERITY_COLOR: Record<string, string> = {
-  low: "bg-neutral-100 text-neutral-600",
-  medium: "bg-amber-50 text-amber-700",
-  high: "bg-red-50 text-red-700",
+  low: "bg-surface-muted-2 text-ink-secondary",
+  medium: "bg-warning-bg text-warning-text",
+  high: "bg-danger-bg text-danger-text",
 };
 
 function CardChip({
@@ -21,12 +21,12 @@ function CardChip({
   onPreviewCard: (card: Card) => void;
 }) {
   const card = knownCards[id];
-  if (!card) return <span className="text-neutral-500">{id}</span>;
+  if (!card) return <span className="text-ink-secondary">{id}</span>;
   return (
     <button
       type="button"
       onClick={() => onPreviewCard(card)}
-      className="inline-flex items-center gap-1 text-neutral-600 hover:underline"
+      className="inline-flex items-center gap-1 text-ink-secondary hover:underline"
     >
       {card.imageSmall && (
         // eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image, small inline chip
@@ -63,10 +63,10 @@ function SwapCardGroup({
               // eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image
               <img src={card.imageSmall} alt="" className="w-10 rounded-sm shrink-0" />
             ) : (
-              <div className="w-10 aspect-[63/88] shrink-0 rounded-sm bg-neutral-100" />
+              <div className="w-10 aspect-[63/88] shrink-0 rounded-sm bg-surface-muted-2" />
             )}
             <span className="text-xs">
-              <span className={sign === "remove" ? "text-red-700" : "text-green-700"}>
+              <span className={sign === "remove" ? "text-danger-text" : "text-success-text"}>
                 {sign === "remove" ? "−" : "+"}
                 {ref.count}×
               </span>{" "}
@@ -153,41 +153,41 @@ export function DeckReviewPanel({
   }
 
   return (
-    <div className="rounded-lg border border-neutral-200 p-4 space-y-4">
+    <div className="rounded-lg border border-line p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="font-medium">AI Review</h2>
         <button
           type="button"
           onClick={handleGenerate}
           disabled={status === "generating"}
-          className="min-h-11 px-4 rounded-md bg-neutral-900 text-white text-sm font-medium disabled:opacity-50"
+          className="min-h-11 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
         >
           {status === "generating" ? "Reviewing…" : review ? "Regenerate review" : "Generate review"}
         </button>
       </div>
 
-      {status === "loading" && <p className="text-sm text-neutral-400">Checking for an existing review…</p>}
+      {status === "loading" && <p className="text-sm text-ink-muted">Checking for an existing review…</p>}
 
       {status === "rate_limited" && (
-        <p className="text-sm text-amber-700 bg-amber-50 rounded-md px-3 py-2" role="alert">
+        <p className="text-sm text-warning-text bg-warning-bg rounded-md px-3 py-2" role="alert">
           {errorMessage}
         </p>
       )}
       {status === "error" && (
-        <p className="text-sm text-red-600" role="alert">
+        <p className="text-sm text-danger-text" role="alert">
           {errorMessage}
         </p>
       )}
 
       {isStale && review && (
-        <p className="text-sm text-amber-700 bg-amber-50 rounded-md px-3 py-2" role="status">
+        <p className="text-sm text-warning-text bg-warning-bg rounded-md px-3 py-2" role="status">
           This review was generated before your most recent changes — it may be outdated. Regenerate for an
           up-to-date review.
         </p>
       )}
 
       {!review && status === "idle" && (
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-ink-secondary">
           Generate a review for strategic feedback based on this deck&apos;s cards and text. This is not live
           tournament-meta analysis.
         </p>
@@ -198,19 +198,19 @@ export function DeckReviewPanel({
           <p className="text-sm">{review.summary}</p>
 
           <div className="flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full px-2.5 py-1 bg-neutral-100 text-neutral-600">
+            <span className="rounded-full px-2.5 py-1 bg-surface-muted-2 text-ink-secondary">
               Confidence: {review.confidence}
             </span>
           </div>
 
           {review.strengths.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-neutral-500 mb-1">Strengths</h3>
+              <h3 className="text-sm font-semibold text-ink-secondary mb-1">Strengths</h3>
               <ul className="space-y-2">
                 {review.strengths.map((s, i) => (
                   <li key={i} className="text-sm">
                     <p className="font-medium">{s.title}</p>
-                    <p className="text-neutral-600">{s.explanation}</p>
+                    <p className="text-ink-secondary">{s.explanation}</p>
                     {s.evidenceCardIds.length > 0 && (
                       <p className="text-xs mt-1 flex flex-wrap gap-x-3 gap-y-1">
                         {s.evidenceCardIds.map((id) => (
@@ -226,7 +226,7 @@ export function DeckReviewPanel({
 
           {review.issues.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-neutral-500 mb-1">Issues</h3>
+              <h3 className="text-sm font-semibold text-ink-secondary mb-1">Issues</h3>
               <ul className="space-y-2">
                 {review.issues.map((issue, i) => (
                   <li key={i} className="text-sm">
@@ -236,7 +236,7 @@ export function DeckReviewPanel({
                       </span>
                       <p className="font-medium">{issue.title}</p>
                     </div>
-                    <p className="text-neutral-600 mt-0.5">{issue.explanation}</p>
+                    <p className="text-ink-secondary mt-0.5">{issue.explanation}</p>
                     {issue.evidenceCardIds.length > 0 && (
                       <p className="text-xs mt-1 flex flex-wrap gap-x-3 gap-y-1">
                         {issue.evidenceCardIds.map((id) => (
@@ -252,14 +252,14 @@ export function DeckReviewPanel({
 
           {review.suggestedSwaps.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-neutral-500 mb-1">Suggested swaps</h3>
-              <p className="text-xs text-neutral-400 mb-2">
+              <h3 className="text-sm font-semibold text-ink-secondary mb-1">Suggested swaps</h3>
+              <p className="text-xs text-ink-muted mb-2">
                 Optional — nothing here is applied automatically. Review each suggestion and apply it yourself if
                 you agree.
               </p>
               <ul className="space-y-3">
                 {review.suggestedSwaps.map((swap, i) => (
-                  <li key={i} className="rounded-md border border-neutral-200 p-3">
+                  <li key={i} className="rounded-md border border-line p-3">
                     <div className="flex items-center gap-3">
                       <SwapCardGroup
                         cards={swap.remove}
@@ -267,7 +267,7 @@ export function DeckReviewPanel({
                         onPreviewCard={onPreviewCard}
                         sign="remove"
                       />
-                      <span className="text-neutral-300 text-lg shrink-0">→</span>
+                      <span className="text-ink-muted text-lg shrink-0">→</span>
                       <SwapCardGroup
                         cards={swap.add}
                         knownCards={knownCards}
@@ -275,7 +275,7 @@ export function DeckReviewPanel({
                         sign="add"
                       />
                     </div>
-                    <p className="text-sm text-neutral-600 mt-2">{swap.reason}</p>
+                    <p className="text-sm text-ink-secondary mt-2">{swap.reason}</p>
                     <button
                       type="button"
                       disabled={appliedSwapIndices.has(i)}
@@ -283,7 +283,7 @@ export function DeckReviewPanel({
                         onApplySwap(swap.remove, swap.add);
                         setAppliedSwapIndices((prev) => new Set(prev).add(i));
                       }}
-                      className="min-h-11 mt-2 px-3 rounded-md border border-neutral-300 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="min-h-11 mt-2 px-3 rounded-md border border-line-strong text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {appliedSwapIndices.has(i) ? "Applied ✓" : "Apply this swap"}
                     </button>
@@ -294,7 +294,7 @@ export function DeckReviewPanel({
           )}
 
           {review.limitations.length > 0 && (
-            <p className="text-xs text-neutral-400 border-t border-neutral-200 pt-2">
+            <p className="text-xs text-ink-muted border-t border-line pt-2">
               {review.limitations.join(" ")}
             </p>
           )}

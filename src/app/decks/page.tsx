@@ -36,9 +36,9 @@ const STATUS_LABEL: Record<DeckStatus, string> = {
 };
 
 const STATUS_COLOR: Record<DeckStatus, string> = {
-  draft: "bg-neutral-100 text-neutral-600",
-  complete: "bg-blue-50 text-blue-700",
-  format_legal: "bg-green-50 text-green-700",
+  draft: "bg-surface-muted-2 text-ink-secondary",
+  complete: "bg-info-bg text-info-text",
+  format_legal: "bg-success-bg text-success-text",
 };
 
 function formatDate(iso: string): string {
@@ -137,25 +137,25 @@ export default function DeckLibraryPage() {
         <h1 className="text-2xl font-semibold">Your decks</h1>
         <Link
           href="/decks/new"
-          className="min-h-11 inline-flex items-center rounded-md bg-neutral-900 px-4 text-white text-sm font-medium"
+          className="min-h-11 inline-flex items-center rounded-md bg-primary px-4 text-primary-foreground text-sm font-medium"
         >
           New deck
         </Link>
       </div>
 
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-ink-secondary">
         Decks are saved to this browser. Use a share link to view a deck elsewhere.
         Account-based cross-device access is not included in this version.
       </p>
 
       {decks && decks.length > 0 && (
         <div className="flex items-center gap-2">
-          <label htmlFor="sort" className="text-sm text-neutral-600">
+          <label htmlFor="sort" className="text-sm text-ink-secondary">
             Sort by
           </label>
           <select
             id="sort"
-            className="min-h-11 rounded-md border border-neutral-300 px-2 text-sm"
+            className="min-h-11 rounded-md border border-line-strong px-2 text-sm"
             value={sort}
             onChange={(e) => setSort(e.target.value as SortBy)}
           >
@@ -166,15 +166,15 @@ export default function DeckLibraryPage() {
         </div>
       )}
 
-      {status === "loading" && <p className="text-neutral-500">Loading decks…</p>}
+      {status === "loading" && <p className="text-ink-secondary">Loading decks…</p>}
       {status === "error" && (
-        <p className="text-red-600" role="alert">
+        <p className="text-danger-text" role="alert">
           Couldn&apos;t load your decks. Please try again.
         </p>
       )}
 
       {status === "idle" && decks && decks.length === 0 && (
-        <div className="py-16 text-center text-neutral-500">
+        <div className="py-16 text-center text-ink-secondary">
           <p className="font-medium">No decks yet</p>
           <p className="text-sm mt-1">
             <Link href="/decks/new" className="underline">
@@ -187,7 +187,7 @@ export default function DeckLibraryPage() {
       {status === "idle" && decks && decks.length > 0 && (
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {decks.map((deck) => (
-            <li key={deck.id} className="flex flex-col rounded-lg border border-neutral-200 p-4">
+            <li key={deck.id} className="flex flex-col rounded-lg border border-line p-4">
               <div className="min-w-0">
                 <div className="flex items-start gap-1.5">
                   {(deck.energyTypes ?? []).length > 0 && (
@@ -199,7 +199,7 @@ export default function DeckLibraryPage() {
                     <input
                       autoFocus
                       aria-label={`Rename ${deck.name}`}
-                      className="min-h-11 w-full min-w-0 rounded-md border border-neutral-300 px-2 text-sm font-medium"
+                      className="min-h-11 w-full min-w-0 rounded-md border border-line-strong px-2 text-sm font-medium"
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
                       onBlur={() => handleRenameSubmit(deck.id)}
@@ -222,7 +222,7 @@ export default function DeckLibraryPage() {
               </div>
 
               <div className="mt-3 min-w-0">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-secondary">
                   <span className={`rounded-full px-2 py-0.5 whitespace-nowrap ${STATUS_COLOR[deck.status]}`}>
                     {STATUS_LABEL[deck.status]}
                   </span>
@@ -244,15 +244,15 @@ export default function DeckLibraryPage() {
                     </span>
                   )}
                 </div>
-                <div className="mt-1 text-xs text-neutral-400">Updated {formatDate(deck.updatedAt)}</div>
+                <div className="mt-1 text-xs text-ink-muted">Updated {formatDate(deck.updatedAt)}</div>
               </div>
 
-              <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center justify-between gap-1">
+              <div className="mt-3 pt-3 border-t border-line flex items-center justify-between gap-1">
                 <Link
                   href={`/decks/${deck.id}`}
                   title={`Open ${deck.name}`}
                   aria-label={`Open ${deck.name}`}
-                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-line-strong text-ink-secondary hover:bg-surface-muted"
                 >
                   <OpenIcon />
                 </Link>
@@ -260,7 +260,7 @@ export default function DeckLibraryPage() {
                   type="button"
                   title={`Rename ${deck.name}`}
                   aria-label={`Rename ${deck.name}`}
-                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-line-strong text-ink-secondary hover:bg-surface-muted"
                   onClick={() => {
                     setRenamingId(deck.id);
                     setRenameValue(deck.name);
@@ -272,7 +272,7 @@ export default function DeckLibraryPage() {
                   type="button"
                   title={`Duplicate ${deck.name}`}
                   aria-label={`Duplicate ${deck.name}`}
-                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-line-strong text-ink-secondary hover:bg-surface-muted"
                   onClick={() => handleDuplicate(deck.id)}
                 >
                   <DuplicateIcon />
@@ -281,7 +281,7 @@ export default function DeckLibraryPage() {
                   type="button"
                   title={`Delete ${deck.name}`}
                   aria-label={`Delete ${deck.name}`}
-                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-red-200 text-red-700 hover:bg-red-50"
+                  className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md border border-danger-border text-danger-text hover:bg-danger-bg"
                   onClick={() => handleDelete(deck.id, deck.name)}
                 >
                   <DeleteIcon />
@@ -293,11 +293,11 @@ export default function DeckLibraryPage() {
       )}
 
       {undoToast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-lg bg-neutral-900 text-white px-4 py-3 shadow-lg">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-lg bg-primary text-primary-foreground px-4 py-3 shadow-lg">
           <span className="text-sm">Deleted &quot;{undoToast.name}&quot;</span>
           <button
             type="button"
-            className="min-h-11 px-3 rounded-md bg-white/10 text-sm font-medium"
+            className="min-h-11 px-3 rounded-md bg-primary-foreground/10 text-sm font-medium"
             onClick={handleUndoDelete}
           >
             Undo
@@ -306,7 +306,7 @@ export default function DeckLibraryPage() {
       )}
 
       {status === "idle" && decks && (
-        <div className="pt-6 border-t border-neutral-200">
+        <div className="pt-6 border-t border-line">
           <CardBrowser heading="Search cards" />
         </div>
       )}

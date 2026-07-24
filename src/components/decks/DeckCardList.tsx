@@ -15,6 +15,16 @@ import {
   type EvolutionGroupNode,
 } from "@/lib/deck/deck-card-grouping";
 
+/** Walks an evolution-line tree in the same order EvolutionGroupList renders it: a node's own entries, then its children, recursively. */
+function flattenEvolutionTree(nodes: EvolutionGroupNode[]): DeckCardEntry[] {
+  const out: DeckCardEntry[] = [];
+  for (const node of nodes) {
+    out.push(...node.entries);
+    out.push(...flattenEvolutionTree(node.children));
+  }
+  return out;
+}
+
 type SharedRowProps = {
   cardsById: Record<string, Card>;
   format: DeckFormat;
@@ -40,27 +50,27 @@ function DeckCardRow({ entry, ...props }: { entry: DeckCardEntry } & SharedRowPr
   return (
     <li>
       <div
-        className={`flex items-center gap-2 rounded-md border border-neutral-200 p-1.5 ${legal ? "" : "bg-amber-50"}`}
+        className={`flex items-center gap-2 rounded-md border border-line p-1.5 ${legal ? "" : "bg-warning-bg"}`}
       >
         {card?.imageSmall ? (
           <button
             type="button"
             onClick={() => onPreviewCard(card)}
             aria-label={`View larger image of ${entry.cardName}`}
-            className="shrink-0 rounded focus:outline-none focus:ring-2 focus:ring-neutral-500"
+            className="shrink-0 rounded focus:outline-none focus:ring-2 focus:ring-line-stronger"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image */}
             <img src={card.imageSmall} alt="" className="w-10 rounded-sm" />
           </button>
         ) : (
-          <div className="w-10 aspect-[63/88] shrink-0 rounded-sm bg-neutral-100" />
+          <div className="w-10 aspect-[63/88] shrink-0 rounded-sm bg-surface-muted-2" />
         )}
 
         <div className="flex-1 min-w-0">
           <p className="text-sm truncate">{entry.cardName}</p>
           {card && (
             <>
-              <p className="text-xs text-neutral-500 truncate">{card.setName}</p>
+              <p className="text-xs text-ink-secondary truncate">{card.setName}</p>
               {/*
                 Set, energy type, and rarity used to share one truncated
                 text line — at deeper evolution-line indentation levels
@@ -74,19 +84,19 @@ function DeckCardRow({ entry, ...props }: { entry: DeckCardEntry } & SharedRowPr
               <div className="mt-0.5 flex flex-wrap items-center gap-1">
                 {displayTypes.length > 0 && <EnergyTypeStack types={displayTypes} size={14} />}
                 {card.rarity && (
-                  <span className="whitespace-nowrap rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600">
+                  <span className="whitespace-nowrap rounded-full bg-surface-muted-2 px-1.5 py-0.5 text-[10px] text-ink-secondary">
                     {card.rarity}
                   </span>
                 )}
                 {price && (
-                  <span className="whitespace-nowrap rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600">
+                  <span className="whitespace-nowrap rounded-full bg-surface-muted-2 px-1.5 py-0.5 text-[10px] text-ink-secondary">
                     {price}
                   </span>
                 )}
               </div>
             </>
           )}
-          {!legal && <span className="text-xs text-amber-700 whitespace-nowrap">Not legal in this format</span>}
+          {!legal && <span className="text-xs text-warning-text whitespace-nowrap">Not legal in this format</span>}
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -95,7 +105,7 @@ function DeckCardRow({ entry, ...props }: { entry: DeckCardEntry } & SharedRowPr
               type="button"
               aria-expanded={isExpanded}
               aria-label={`Show evolution line for ${entry.cardName}`}
-              className="min-h-11 px-2 rounded-md border border-neutral-300 text-xs text-neutral-600"
+              className="min-h-11 px-2 rounded-md border border-line-strong text-xs text-ink-secondary"
               onClick={() => setExpandedCardId(isExpanded ? null : entry.cardId)}
             >
               Evolutions {isExpanded ? "▲" : "▼"}
@@ -104,7 +114,7 @@ function DeckCardRow({ entry, ...props }: { entry: DeckCardEntry } & SharedRowPr
           <button
             type="button"
             aria-label={`Decrease ${entry.cardName} quantity`}
-            className="min-h-11 min-w-11 rounded-md border border-neutral-300 text-lg leading-none"
+            className="min-h-11 min-w-11 rounded-md border border-line-strong text-lg leading-none"
             onClick={() => onChangeQuantity(entry.cardId, entry.quantity - 1)}
           >
             −
@@ -113,7 +123,7 @@ function DeckCardRow({ entry, ...props }: { entry: DeckCardEntry } & SharedRowPr
           <button
             type="button"
             aria-label={`Increase ${entry.cardName} quantity`}
-            className="min-h-11 min-w-11 rounded-md border border-neutral-300 text-lg leading-none"
+            className="min-h-11 min-w-11 rounded-md border border-line-strong text-lg leading-none"
             onClick={() => onChangeQuantity(entry.cardId, entry.quantity + 1)}
           >
             +
@@ -121,7 +131,7 @@ function DeckCardRow({ entry, ...props }: { entry: DeckCardEntry } & SharedRowPr
           <button
             type="button"
             aria-label={`Remove all copies of ${entry.cardName}`}
-            className="min-h-11 px-2 rounded-md border border-neutral-300 text-xs text-neutral-500"
+            className="min-h-11 px-2 rounded-md border border-line-strong text-xs text-ink-secondary"
             onClick={() => onRemoveAll(entry.cardId)}
           >
             Remove
@@ -144,7 +154,7 @@ function EvolutionGroupList({ node, depth, ...props }: { node: EvolutionGroupNod
       {node.entries.map((entry) => (
         <div
           key={entry.cardId}
-          className={depth > 0 ? "border-l-2 border-neutral-200 pl-2" : undefined}
+          className={depth > 0 ? "border-l-2 border-line pl-2" : undefined}
           style={depth > 0 ? { marginLeft: depth * 16 } : undefined}
         >
           <DeckCardRow entry={entry} {...props} />
@@ -172,30 +182,20 @@ export function DeckCardList({
   onChangeQuantity: (cardId: string, quantity: number) => void;
   onRemoveAll: (cardId: string) => void;
   onAddCard: (card: Card) => void;
-  onPreviewCard: (card: Card) => void;
+  /** `cards`/`index` reflect this list's own visual order (evolution-grouped Pokémon, then Trainer-by-category, then Energy) — not the raw `entries` order, which doesn't match what's on screen. */
+  onPreviewCard: (card: Card, cards: Card[], index: number) => void;
 }) {
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
   if (entries.length === 0) {
     return (
-      <div className="py-10 text-center text-neutral-500 text-sm">
+      <div className="py-10 text-center text-ink-secondary text-sm">
         No cards yet — search on the left and add some.
       </div>
     );
   }
 
   const deckCardIds = new Set(entries.map((e) => e.cardId));
-  const rowProps: SharedRowProps = {
-    cardsById,
-    format,
-    onChangeQuantity,
-    onRemoveAll,
-    onAddCard,
-    onPreviewCard,
-    expandedCardId,
-    setExpandedCardId,
-    deckCardIds,
-  };
 
   const pokemonTree = groupPokemonByEvolutionLine(entries, cardsById);
   const pokemonCount = entries
@@ -214,11 +214,39 @@ export function DeckCardList({
 
   const unresolved = entries.filter((e) => !cardsById[e.cardId]);
 
+  // Same order the sections below actually render in: evolution-grouped
+  // Pokémon, then Trainers by category, then Energy — not `entries`'
+  // raw order, which doesn't match what's visually adjacent on screen.
+  const visualOrderCards: Card[] = [
+    ...flattenEvolutionTree(pokemonTree)
+      .map((e) => cardsById[e.cardId])
+      .filter((c): c is Card => !!c),
+    ...trainerGroups
+      .flatMap((g) => g.entries)
+      .map((e) => cardsById[e.cardId])
+      .filter((c): c is Card => !!c),
+    ...energyEntries.map((e) => cardsById[e.cardId]).filter((c): c is Card => !!c),
+  ];
+  const previewIndexByCardId = new Map(visualOrderCards.map((c, i) => [c.id, i]));
+
+  const rowProps: SharedRowProps = {
+    cardsById,
+    format,
+    onChangeQuantity,
+    onRemoveAll,
+    onAddCard,
+    onPreviewCard: (card) =>
+      onPreviewCard(card, visualOrderCards, previewIndexByCardId.get(card.id) ?? 0),
+    expandedCardId,
+    setExpandedCardId,
+    deckCardIds,
+  };
+
   return (
     <div className="space-y-6">
       {pokemonTree.length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-neutral-500 mb-2">Pokémon ({pokemonCount})</h3>
+          <h3 className="text-sm font-semibold text-ink-secondary mb-2">Pokémon ({pokemonCount})</h3>
           <ul className="space-y-1">
             {pokemonTree.map((root) => (
               <EvolutionGroupList key={root.name} node={root} depth={0} {...rowProps} />
@@ -229,11 +257,11 @@ export function DeckCardList({
 
       {trainerGroups.length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-neutral-500 mb-2">Trainer ({trainerCount})</h3>
+          <h3 className="text-sm font-semibold text-ink-secondary mb-2">Trainer ({trainerCount})</h3>
           <div className="space-y-3">
             {trainerGroups.map((group) => (
               <div key={group.category}>
-                <h4 className="text-xs font-medium text-neutral-400 mb-1">
+                <h4 className="text-xs font-medium text-ink-muted mb-1">
                   {group.category} ({group.entries.reduce((s, e) => s + e.quantity, 0)})
                 </h4>
                 <ul className="space-y-1">
@@ -249,7 +277,7 @@ export function DeckCardList({
 
       {energyEntries.length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-neutral-500 mb-2">Energy ({energyCount})</h3>
+          <h3 className="text-sm font-semibold text-ink-secondary mb-2">Energy ({energyCount})</h3>
           <ul className="space-y-1">
             {energyEntries.map((entry) => (
               <DeckCardRow key={entry.cardId} entry={entry} {...rowProps} />
@@ -260,17 +288,17 @@ export function DeckCardList({
 
       {unresolved.length > 0 && (
         <section>
-          <h3 className="text-sm font-semibold text-amber-700 mb-2">Unresolved ({unresolved.length})</h3>
+          <h3 className="text-sm font-semibold text-warning-text mb-2">Unresolved ({unresolved.length})</h3>
           <ul className="space-y-1">
             {unresolved.map((entry) => (
               <li
                 key={entry.cardId}
-                className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-sm"
+                className="flex items-center justify-between rounded-md border border-warning-border bg-warning-bg px-2 py-1.5 text-sm"
               >
                 <span>{entry.cardName} (not found in catalogue)</span>
                 <button
                   type="button"
-                  className="min-h-11 px-2 text-xs text-neutral-600"
+                  className="min-h-11 px-2 text-xs text-ink-secondary"
                   onClick={() => onRemoveAll(entry.cardId)}
                 >
                   Remove

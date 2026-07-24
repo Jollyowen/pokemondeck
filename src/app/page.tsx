@@ -22,26 +22,26 @@ export default async function HomePage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Welcome</h1>
-      <p className="text-neutral-600">
+      <p className="text-ink-secondary">
         Browse the card catalogue to get started, or jump straight into
         building a deck.
       </p>
       <div className="flex gap-3">
         <Link
           href="/cards"
-          className="inline-block min-h-11 rounded-md bg-neutral-900 px-4 py-2.5 text-white text-sm font-medium"
+          className="inline-block min-h-11 rounded-md bg-primary px-4 py-2.5 text-primary-foreground text-sm font-medium"
         >
           Browse cards
         </Link>
         <Link
           href="/decks/new"
-          className="inline-block min-h-11 rounded-md border border-neutral-300 px-4 py-2.5 text-sm font-medium"
+          className="inline-block min-h-11 rounded-md border border-line-strong px-4 py-2.5 text-sm font-medium"
         >
           New deck
         </Link>
       </div>
 
-      <div className="pt-4 border-t border-neutral-200">
+      <div className="pt-4 border-t border-line">
         <CardBrowser heading="Search cards" />
       </div>
     </div>

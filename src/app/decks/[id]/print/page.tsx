@@ -58,19 +58,19 @@ export default function DeckPrintPage({ params }: { params: Promise<{ id: string
       .catch(() => setLoadState("error"));
   }, [deckId]);
 
-  if (loadState === "loading") return <p className="text-neutral-500 px-4 py-6">Loading deck…</p>;
+  if (loadState === "loading") return <p className="text-ink-secondary px-4 py-6">Loading deck…</p>;
   if (loadState === "notFound") {
     return (
       <div className="px-4 py-6 space-y-2">
         <p className="font-medium">Deck not found</p>
-        <Link href="/decks" className="text-sm text-neutral-500 hover:underline">
+        <Link href="/decks" className="text-sm text-ink-secondary hover:underline">
           Back to your decks →
         </Link>
       </div>
     );
   }
   if (loadState === "error" || !deck) {
-    return <p className="text-red-600 px-4 py-6">Something went wrong loading this deck.</p>;
+    return <p className="text-danger-text px-4 py-6">Something went wrong loading this deck.</p>;
   }
 
   const pokemonTree = groupPokemonByEvolutionLine(deck.cards, knownCards);
@@ -93,13 +93,13 @@ export default function DeckPrintPage({ params }: { params: Promise<{ id: string
   return (
     <div className="px-4 py-6 print:px-0 print:py-0">
       <div className="flex items-center justify-between gap-3 mb-6 print:hidden">
-        <Link href={`/decks/${deckId}`} className="text-sm text-neutral-500 hover:underline">
+        <Link href={`/decks/${deckId}`} className="text-sm text-ink-secondary hover:underline">
           ← Back to deck
         </Link>
         <button
           type="button"
           onClick={() => window.print()}
-          className="min-h-11 px-4 rounded-md bg-neutral-900 text-white text-sm font-medium"
+          className="min-h-11 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium"
         >
           Print
         </button>
@@ -108,7 +108,7 @@ export default function DeckPrintPage({ params }: { params: Promise<{ id: string
       {/* Page 1: the simple grouped list */}
       <section className="break-after-page">
         <h1 className="text-2xl font-semibold mb-1">{deck.name}</h1>
-        <p className="text-sm text-neutral-500 mb-6">
+        <p className="text-sm text-ink-secondary mb-6">
           {deck.format === "all" ? "All formats" : `${deck.format[0]?.toUpperCase()}${deck.format.slice(1)}`} ·{" "}
           {deck.cards.reduce((s, e) => s + e.quantity, 0)} cards
         </p>
@@ -171,7 +171,7 @@ function PrintListSection({
   const count = entries.reduce((s, e) => s + e.quantity, 0);
   return (
     <div className="mb-4">
-      <h2 className="text-sm font-semibold text-neutral-500 mb-1.5 break-inside-avoid">
+      <h2 className="text-sm font-semibold text-ink-secondary mb-1.5 break-inside-avoid">
         {title} ({count})
       </h2>
       <ul className="text-sm divide-y divide-neutral-100">
@@ -180,11 +180,11 @@ function PrintListSection({
           const displayTypes = card ? resolveDisplayTypes(card) : [];
           return (
             <li key={entry.cardId} className="flex items-center gap-2 py-1 break-inside-avoid">
-              <span className="w-6 shrink-0 tabular-nums text-neutral-500">{entry.quantity}×</span>
+              <span className="w-6 shrink-0 tabular-nums text-ink-secondary">{entry.quantity}×</span>
               {displayTypes.length > 0 && <EnergyTypeStack types={displayTypes} size={14} />}
               <span className="flex-1 min-w-0 truncate">{entry.cardName}</span>
-              {card && <span className="shrink-0 text-neutral-400 text-xs">{card.setName}</span>}
-              {!card && <span className="shrink-0 text-amber-600 text-xs">Not found in catalogue</span>}
+              {card && <span className="shrink-0 text-ink-muted text-xs">{card.setName}</span>}
+              {!card && <span className="shrink-0 text-warning-text text-xs">Not found in catalogue</span>}
             </li>
           );
         })}

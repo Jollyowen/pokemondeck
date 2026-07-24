@@ -83,12 +83,12 @@ export function ShareDeckPanel({
   }
 
   return (
-    <div className="rounded-lg border border-neutral-200 p-4 space-y-3">
+    <div className="rounded-lg border border-line p-4 space-y-3">
       <h2 className="font-medium">Share</h2>
 
       {!shareEnabled && (
         <div>
-          <p className="text-sm text-neutral-500 mb-2">
+          <p className="text-sm text-ink-secondary mb-2">
             Sharing gives anyone with the link a read-only view of this deck. They can copy it into
             their own library, but can&apos;t change your copy.
           </p>
@@ -96,7 +96,7 @@ export function ShareDeckPanel({
             type="button"
             disabled={busy}
             onClick={handleEnable}
-            className="min-h-11 px-4 rounded-md bg-neutral-900 text-white text-sm font-medium disabled:opacity-50"
+            className="min-h-11 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
           >
             {busy ? "Enabling…" : "Enable sharing"}
           </button>
@@ -110,13 +110,13 @@ export function ShareDeckPanel({
               readOnly
               aria-label="Shareable deck link"
               value={shareUrl}
-              className="min-h-11 flex-1 min-w-[220px] rounded-md border border-neutral-300 px-2 text-sm"
+              className="min-h-11 flex-1 min-w-[220px] rounded-md border border-line-strong px-2 text-sm"
               onFocus={(e) => e.target.select()}
             />
             <button
               type="button"
               onClick={handleCopyLink}
-              className="min-h-11 px-3 rounded-md border border-neutral-300 text-sm"
+              className="min-h-11 px-3 rounded-md border border-line-strong text-sm"
             >
               {copied ? "Copied!" : "Copy link"}
             </button>
@@ -124,14 +124,14 @@ export function ShareDeckPanel({
 
           {qrDataUrl && (
             // eslint-disable-next-line @next/next/no-img-element -- locally generated data URL, not a remote image
-            <img src={qrDataUrl} alt="QR code linking to the shared deck" className="rounded-md border border-neutral-200" width={150} height={150} />
+            <img src={qrDataUrl} alt="QR code linking to the shared deck" className="rounded-md border border-line" width={150} height={150} />
           )}
 
           <button
             type="button"
             disabled={busy}
             onClick={handleRevoke}
-            className="min-h-11 px-4 rounded-md border border-red-200 text-red-700 text-sm disabled:opacity-50"
+            className="min-h-11 px-4 rounded-md border border-danger-border text-danger-text text-sm disabled:opacity-50"
           >
             {busy ? "Revoking…" : "Revoke sharing"}
           </button>
@@ -139,7 +139,7 @@ export function ShareDeckPanel({
       )}
 
       {error && (
-        <p className="text-sm text-red-600" role="alert">
+        <p className="text-sm text-danger-text" role="alert">
           {error}
         </p>
       )}

@@ -79,7 +79,7 @@ export function AiDeckGeneratorForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-ink-secondary">
         Describe what you want and the AI will propose a starting 60-card deck using real cards from the
         catalogue. You&apos;ll land in the normal deck editor afterwards to review, adjust, and complete it —
         nothing here is final.
@@ -94,7 +94,7 @@ export function AiDeckGeneratorForm() {
           type="text"
           required
           autoComplete="off"
-          className="min-h-11 w-full rounded-md border border-neutral-300 px-3 text-sm"
+          className="min-h-11 w-full rounded-md border border-line-strong px-3 text-sm"
           placeholder="e.g. Charizard"
           value={pokemonName}
           onChange={(e) => {
@@ -106,7 +106,7 @@ export function AiDeckGeneratorForm() {
           maxLength={100}
         />
         {showSuggestions && suggestions.length > 0 && (
-          <ul className="absolute z-10 mt-1 w-full rounded-md border border-neutral-200 bg-white shadow-md max-h-48 overflow-auto">
+          <ul className="absolute z-10 mt-1 w-full rounded-md border border-line bg-surface shadow-md max-h-48 overflow-auto">
             {suggestions.map((card) => (
               <li key={card.name}>
                 <button
@@ -115,7 +115,7 @@ export function AiDeckGeneratorForm() {
                     setPokemonName(card.name);
                     setShowSuggestions(false);
                   }}
-                  className="min-h-11 w-full text-left px-3 text-sm hover:bg-neutral-50"
+                  className="min-h-11 w-full text-left px-3 text-sm hover:bg-surface-muted"
                 >
                   {card.name}
                 </button>
@@ -133,7 +133,7 @@ export function AiDeckGeneratorForm() {
           id="generate-strategy"
           value={strategyArchetype}
           onChange={(e) => setStrategyArchetype(e.target.value as StrategyArchetype | "")}
-          className="min-h-11 w-full rounded-md border border-neutral-300 px-2 text-sm"
+          className="min-h-11 w-full rounded-md border border-line-strong px-2 text-sm"
         >
           <option value="">Let the AI decide</option>
           <option value="aggro">Aggro / Beatdown</option>
@@ -150,7 +150,7 @@ export function AiDeckGeneratorForm() {
         <input
           id="generate-notes"
           type="text"
-          className="min-h-11 w-full rounded-md border border-neutral-300 px-3 text-sm"
+          className="min-h-11 w-full rounded-md border border-line-strong px-3 text-sm"
           placeholder='e.g. "focused on early pressure, keep it budget-friendly"'
           value={strategyNotes}
           onChange={(e) => setStrategyNotes(e.target.value)}
@@ -169,8 +169,8 @@ export function AiDeckGeneratorForm() {
               aria-pressed={format === f}
               className={`min-h-11 px-4 rounded-full text-sm border ${
                 format === f
-                  ? "bg-neutral-900 text-white border-neutral-900"
-                  : "border-neutral-300 text-neutral-700"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-line-strong text-ink-secondary"
               }`}
             >
               {f === "all" ? "All formats" : `${f[0]?.toUpperCase() ?? ""}${f.slice(1)}`}
@@ -180,7 +180,7 @@ export function AiDeckGeneratorForm() {
       </div>
 
       {error && (
-        <p className="text-sm text-red-600" role="alert">
+        <p className="text-sm text-danger-text" role="alert">
           {error}
         </p>
       )}
@@ -188,7 +188,7 @@ export function AiDeckGeneratorForm() {
       <button
         type="submit"
         disabled={submitting || !pokemonName.trim()}
-        className="min-h-11 px-5 rounded-md bg-neutral-900 text-white text-sm font-medium disabled:opacity-50"
+        className="min-h-11 px-5 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
       >
         {submitting ? "Generating… this can take a moment" : "Generate deck"}
       </button>

@@ -33,7 +33,7 @@ export default async function CardDetailPage({
 
   return (
     <div className="space-y-4">
-      <Link href="/cards" className="text-sm text-neutral-500 hover:underline">
+      <Link href="/cards" className="text-sm text-ink-secondary hover:underline">
         ← Back to catalogue
       </Link>
 
@@ -43,7 +43,7 @@ export default async function CardDetailPage({
             // eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image
             <img src={card.imageLarge} alt={card.name} className="w-full rounded-lg" />
           ) : (
-            <div className="aspect-[63/88] w-full rounded-lg bg-neutral-100 flex items-center justify-center text-sm text-neutral-400">
+            <div className="aspect-[63/88] w-full rounded-lg bg-surface-muted-2 flex items-center justify-center text-sm text-ink-muted">
               No image available
             </div>
           )}
@@ -52,19 +52,19 @@ export default async function CardDetailPage({
         <div className="space-y-4">
           <div>
             <h1 className="text-2xl font-semibold">{card.name}</h1>
-            <p className="text-neutral-500">
+            <p className="text-ink-secondary">
               {card.setName} · {card.number} {card.hp ? `· HP ${card.hp}` : ""}
             </p>
             {card.price && card.price.market !== null && (
-              <p className="text-sm text-neutral-600 mt-1">
+              <p className="text-sm text-ink-secondary mt-1">
                 ${card.price.market.toFixed(2)}
                 {card.price.low !== null && card.price.high !== null && (
-                  <span className="text-neutral-400">
+                  <span className="text-ink-muted">
                     {" "}
                     (${card.price.low.toFixed(2)}–${card.price.high.toFixed(2)})
                   </span>
                 )}
-                <span className="text-neutral-400"> · {card.price.variant}</span>
+                <span className="text-ink-muted"> · {card.price.variant}</span>
                 {card.price.url && (
                   <>
                     {" · "}
@@ -90,8 +90,8 @@ export default async function CardDetailPage({
                   key={format}
                   className={`rounded-full px-2.5 py-1 ${
                     card.legalities[format] === "legal"
-                      ? "bg-green-50 text-green-700"
-                      : "bg-neutral-100 text-neutral-500"
+                      ? "bg-success-bg text-success-text"
+                      : "bg-surface-muted-2 text-ink-secondary"
                   }`}
                 >
                   {label}: {card.legalities[format] === "legal" ? "Legal" : "Not legal"}
@@ -108,7 +108,7 @@ export default async function CardDetailPage({
                   <p className="text-sm font-medium">
                     {a.type}: {a.name}
                   </p>
-                  <p className="text-sm text-neutral-600">{a.text}</p>
+                  <p className="text-sm text-ink-secondary">{a.text}</p>
                 </div>
               ))}
             </section>
@@ -121,11 +121,11 @@ export default async function CardDetailPage({
                 <div key={a.name} className="mb-2">
                   <p className="text-sm font-medium">
                     {a.name} {a.damage && `— ${a.damage}`}{" "}
-                    <span className="text-neutral-400 font-normal">
+                    <span className="text-ink-muted font-normal">
                       ({a.convertedEnergyCost} energy)
                     </span>
                   </p>
-                  {a.text && <p className="text-sm text-neutral-600">{a.text}</p>}
+                  {a.text && <p className="text-sm text-ink-secondary">{a.text}</p>}
                 </div>
               ))}
             </section>
@@ -164,7 +164,7 @@ export default async function CardDetailPage({
             <section>
               <h2 className="font-medium mb-1">Rules</h2>
               {card.rules.map((rule, i) => (
-                <p key={i} className="text-sm text-neutral-600">
+                <p key={i} className="text-sm text-ink-secondary">
                   {rule}
                 </p>
               ))}

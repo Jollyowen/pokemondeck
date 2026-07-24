@@ -26,12 +26,12 @@ export function AddCardTile({
   }
 
   return (
-    <div className="rounded-lg border border-neutral-200 p-2">
+    <div className="rounded-lg border border-line p-2">
       <button
         type="button"
         onClick={() => onPreview(card)}
         aria-label={`View larger image of ${card.name}`}
-        className={`block w-full focus:outline-none focus:ring-2 focus:ring-neutral-500 rounded-md ${
+        className={`block w-full focus:outline-none focus:ring-2 focus:ring-line-stronger rounded-md ${
           legal ? "" : "grayscale opacity-50"
         }`}
       >
@@ -39,20 +39,20 @@ export function AddCardTile({
           // eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image
           <img src={card.imageSmall} alt={card.name} className="w-full rounded-md" loading="lazy" />
         ) : (
-          <div className="aspect-[63/88] w-full rounded-md bg-neutral-100 flex items-center justify-center text-xs text-neutral-400">
+          <div className="aspect-[63/88] w-full rounded-md bg-surface-muted-2 flex items-center justify-center text-xs text-ink-muted">
             No image
           </div>
         )}
       </button>
       <p className="mt-1 text-xs font-medium truncate">{card.name}</p>
-      <p className="text-xs text-neutral-500 truncate">
+      <p className="text-xs text-ink-secondary truncate">
         {card.setName} · {card.number}
       </p>
-      {price && <p className="text-xs text-neutral-400">{price}</p>}
+      {price && <p className="text-xs text-ink-muted">{price}</p>}
       <button
         type="button"
         onClick={handleAdd}
-        className="mt-1 min-h-11 w-full rounded-md bg-neutral-900 text-white text-xs font-medium"
+        className="mt-1 min-h-11 w-full rounded-md bg-primary text-primary-foreground text-xs font-medium"
       >
         Add
       </button>

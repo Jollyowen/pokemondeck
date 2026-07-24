@@ -191,8 +191,27 @@ export type DeckQualityIssue = {
   message: string;
 };
 
+/**
+ * One entry per check computeDeckQuality runs, pass or fail — unlike
+ * DeckQualityIssue, which only ever exists for a failure. `checks` is
+ * what the UI's health panel renders; `issues` (unchanged) is still
+ * what feeds the AI refinement prompt's feedback text.
+ */
+export type DeckQualityCheck = {
+  code: DeckQualityIssueCode;
+  severity: "hard" | "soft";
+  label: string;
+  passed: boolean;
+  message: string;
+  /** Present when the check has a concrete number to show (most do). */
+  actual?: number;
+  /** A closed range, or a bare minimum for "at least N" checks. */
+  target?: [number, number] | { min: number };
+};
+
 export type DeckQualityResult = {
   issues: DeckQualityIssue[];
+  checks: DeckQualityCheck[];
   passesHardChecks: boolean;
 };
 

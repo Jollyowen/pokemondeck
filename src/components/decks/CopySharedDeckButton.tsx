@@ -35,11 +35,11 @@ export function CopySharedDeckButton({ shareToken }: { shareToken: string }) {
         type="button"
         disabled={busy}
         onClick={handleCopy}
-        className="min-h-11 px-4 rounded-md bg-neutral-900 text-white text-sm font-medium disabled:opacity-50"
+        className="min-h-11 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
       >
         {busy ? "Copying…" : "Copy to my decks"}
       </button>
-      {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+      {error && <p className="text-sm text-danger-text mt-2">{error}</p>}
     </div>
   );
 }

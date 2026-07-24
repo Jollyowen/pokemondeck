@@ -18,7 +18,7 @@ export function CardTile({ card, format }: { card: Card; format: DeckFormat }) {
   return (
     <Link
       href={`/cards/${card.id}`}
-      className="group block rounded-lg border border-neutral-200 p-2 hover:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-500"
+      className="group block rounded-lg border border-line p-2 hover:border-line-stronger focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-line-stronger"
     >
       <div className={legal ? "" : "grayscale opacity-50"}>
         {card.imageSmall ? (
@@ -30,18 +30,18 @@ export function CardTile({ card, format }: { card: Card; format: DeckFormat }) {
             loading="lazy"
           />
         ) : (
-          <div className="aspect-[63/88] w-full rounded-md bg-neutral-100 flex items-center justify-center text-xs text-neutral-400">
+          <div className="aspect-[63/88] w-full rounded-md bg-surface-muted-2 flex items-center justify-center text-xs text-ink-muted">
             No image
           </div>
         )}
       </div>
       <p className="mt-2 text-sm font-medium truncate">{card.name}</p>
-      <p className="text-xs text-neutral-500 truncate">
+      <p className="text-xs text-ink-secondary truncate">
         {card.setName} · {card.number}
       </p>
-      {price && <p className="text-xs text-neutral-400">{price}</p>}
+      {price && <p className="text-xs text-ink-muted">{price}</p>}
       {!legal && (
-        <p className="mt-1 text-xs text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 inline-block">
+        <p className="mt-1 text-xs text-warning-text bg-warning-bg rounded px-1.5 py-0.5 inline-block">
           Not legal in {FORMAT_LABEL[format]}
         </p>
       )}

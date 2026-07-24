@@ -5,6 +5,79 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --surface: #ffffff;
+  --surface-muted: #fafafa;
+  --surface-muted-2: #f5f5f5;
+  --line: #e5e5e5;
+  --line-strong: #d4d4d4;
+  --line-stronger: #a3a3a3;
+  --ink-secondary: #525252;
+  --ink-muted: #a3a3a3;
+  --fill-primary: #171717;
+  --on-primary: #ffffff;
+  --chart-fill: #404040;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+  --danger-text: #b91c1c;
+  --success-bg: #f0fdf4;
+  --success-text: #15803d;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+  --warning-text: #b45309;
+  --info-bg: #eff6ff;
+  --info-text: #1d4ed8;
+}
+
+/* Dark theme overrides — see ThemeToggle.tsx. Applied via a `.dark` class
+   on <html>, not the `prefers-color-scheme` media query, since the toggle
+   is a deliberate two-way light/dark control, not a system-following one. */
+.dark {
+  --background: #171717;
+  --foreground: #f5f5f5;
+  --surface: #262626;
+  --surface-muted: #1f1f1f;
+  --surface-muted-2: #2a2a2a;
+  --line: #404040;
+  --line-strong: #525252;
+  --line-stronger: #737373;
+  --ink-secondary: #a3a3a3;
+  --ink-muted: #737373;
+  /* Primary button inverts (light fill, dark text) rather than staying a
+     near-black button on an already-dark page, where it would barely
+     read as "filled" at all. */
+  --fill-primary: #f5f5f5;
+  --on-primary: #171717;
+  --chart-fill: #a3a3a3;
+  --danger-bg: rgba(153, 27, 27, 0.25);
+  --danger-border: #7f1d1d;
+  --danger-text: #fca5a5;
+  --success-bg: rgba(22, 101, 52, 0.25);
+  --success-text: #86efac;
+  --warning-bg: rgba(146, 64, 14, 0.25);
+  --warning-border: #92400e;
+  --warning-text: #fcd34d;
+  --info-bg: rgba(30, 64, 175, 0.25);
+  --info-text: #93c5fd;
+}
+
+/* The printed decklist must stay light/ink-on-paper regardless of the
+   active app theme — dark surfaces must never bleed into a printout. */
+@media print {
+  .dark {
+    --background: #ffffff;
+    --foreground: #171717;
+    --surface: #ffffff;
+    --surface-muted: #fafafa;
+    --surface-muted-2: #f5f5f5;
+    --line: #e5e5e5;
+    --line-strong: #d4d4d4;
+    --line-stronger: #a3a3a3;
+    --ink-secondary: #525252;
+    --ink-muted: #a3a3a3;
+    --fill-primary: #171717;
+    --on-primary: #ffffff;
+    --chart-fill: #404040;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

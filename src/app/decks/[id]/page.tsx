@@ -27,9 +27,9 @@ const STATUS_LABEL: Record<Deck["status"], string> = {
 };
 
 const STATUS_COLOR: Record<Deck["status"], string> = {
-  draft: "bg-neutral-100 text-neutral-600",
-  complete: "bg-blue-50 text-blue-700",
-  format_legal: "bg-green-50 text-green-700",
+  draft: "bg-surface-muted-2 text-ink-secondary",
+  complete: "bg-info-bg text-info-text",
+  format_legal: "bg-success-bg text-success-text",
 };
 
 const DEFAULT_FILTERS: CardFilterState = {
@@ -67,7 +67,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
 
   const undoSnapshot = useRef<DeckCardEntry[] | null>(null);
   const [canUndo, setCanUndo] = useState(false);
-  const [previewCard, setPreviewCard] = useState<Card | null>(null);
+  const [preview, setPreview] = useState<{ card: Card; list: Card[]; index: number } | null>(null);
   const loadedRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -337,20 +337,20 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
   }
 
   if (loadState === "loading") {
-    return <p className="text-neutral-500">Loading deck…</p>;
+    return <p className="text-ink-secondary">Loading deck…</p>;
   }
   if (loadState === "notFound") {
     return (
       <div className="space-y-2">
         <p className="font-medium">Deck not found</p>
-        <Link href="/decks/new" className="text-sm text-neutral-500 hover:underline">
+        <Link href="/decks/new" className="text-sm text-ink-secondary hover:underline">
           Start a new deck →
         </Link>
       </div>
     );
   }
   if (loadState === "error") {
-    return <p className="text-red-600">Something went wrong loading this deck.</p>;
+    return <p className="text-danger-text">Something went wrong loading this deck.</p>;
   }
 
   const errorCount = validation?.issues.filter((i) => i.severity === "error").length ?? 0;
@@ -367,17 +367,17 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
     <div className="space-y-4">
       {generationExplanation && (
         <div
-          className="flex items-start justify-between gap-3 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2"
+          className="flex items-start justify-between gap-3 rounded-md border border-line bg-surface-muted px-3 py-2"
           role="status"
         >
-          <p className="text-sm text-neutral-700">
+          <p className="text-sm text-ink-secondary">
             <strong>AI-generated starting point:</strong> {generationExplanation}
           </p>
           <button
             type="button"
             onClick={() => setGenerationExplanation(null)}
             aria-label="Dismiss"
-            className="min-h-11 px-2 text-neutral-400 shrink-0"
+            className="min-h-11 px-2 text-ink-muted shrink-0"
           >
             ✕
           </button>
@@ -390,14 +390,14 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             onChange={(e) => setName(e.target.value)}
             onBlur={handleNameBlur}
             aria-label="Deck name"
-            className="text-2xl font-semibold w-full border-b border-transparent hover:border-neutral-300 focus:border-neutral-500 focus:outline-none"
+            className="text-2xl font-semibold w-full border-b border-transparent hover:border-line-strong focus:border-line-stronger focus:outline-none"
             maxLength={100}
           />
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <select
               value={strategyArchetype}
               onChange={(e) => handleStrategyArchetypeChange(e.target.value as StrategyArchetype | "")}
-              className="min-h-11 rounded-md border border-neutral-300 px-2 text-sm text-neutral-600"
+              className="min-h-11 rounded-md border border-line-strong px-2 text-sm text-ink-secondary"
               aria-label="Deck strategy archetype"
             >
               <option value="">Strategy (optional)</option>
@@ -409,7 +409,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             <select
               value={mainPokemonCardId ?? ""}
               onChange={(e) => handleMainPokemonChange(e.target.value)}
-              className="min-h-11 rounded-md border border-neutral-300 px-2 text-sm text-neutral-600"
+              className="min-h-11 rounded-md border border-line-strong px-2 text-sm text-ink-secondary"
               aria-label="Main Pokémon for this deck's thumbnail"
             >
               <option value="">Main Pokémon (for thumbnail)</option>
@@ -426,20 +426,20 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             onBlur={handleStrategyNotesBlur}
             aria-label="Deck strategy notes"
             placeholder={'Extra detail (optional) — e.g. "focused on early Charizard pressure"'}
-            className="mt-1 text-sm w-full text-neutral-600 border-b border-transparent hover:border-neutral-300 focus:border-neutral-500 focus:outline-none placeholder:text-neutral-400"
+            className="mt-1 text-sm w-full text-ink-secondary border-b border-transparent hover:border-line-strong focus:border-line-stronger focus:outline-none placeholder:text-ink-muted"
             maxLength={300}
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={`text-xs rounded-full px-2.5 py-1 ${STATUS_COLOR[validation?.status ?? "draft"]}`}>
               {STATUS_LABEL[validation?.status ?? "draft"]}
             </span>
-            <span className="text-sm text-neutral-500">{totalCount} / 60 cards</span>
+            <span className="text-sm text-ink-secondary">{totalCount} / 60 cards</span>
             {errorCount > 0 && (
-              <span className="text-xs rounded-full px-2.5 py-1 bg-red-50 text-red-700">
+              <span className="text-xs rounded-full px-2.5 py-1 bg-danger-bg text-danger-text">
                 {errorCount} issue{errorCount === 1 ? "" : "s"}
               </span>
             )}
-            <span className="text-xs text-neutral-400" role="status" aria-live="polite">
+            <span className="text-xs text-ink-muted" role="status" aria-live="polite">
               {saveStatus === "saving" && "Saving…"}
               {saveStatus === "saved" && "Saved"}
               {saveStatus === "error" && "Error saving — changes kept locally, will retry on next edit"}
@@ -455,7 +455,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
               onClick={() => handleFormatChange(f)}
               aria-pressed={format === f}
               className={`min-h-11 px-3 rounded-full text-sm border ${
-                format === f ? "bg-neutral-900 text-white border-neutral-900" : "border-neutral-300"
+                format === f ? "bg-primary text-primary-foreground border-primary" : "border-line-strong"
               }`}
             >
               {f === "all" ? "All" : `${f[0]?.toUpperCase() ?? ""}${f.slice(1)}`}
@@ -465,13 +465,13 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             type="button"
             onClick={handleUndo}
             disabled={!canUndo}
-            className="min-h-11 px-3 rounded-md border border-neutral-300 text-sm disabled:opacity-40"
+            className="min-h-11 px-3 rounded-md border border-line-strong text-sm disabled:opacity-40"
           >
             Undo
           </button>
           <Link
             href={`/decks/${deckId}/print`}
-            className="min-h-11 inline-flex items-center px-3 rounded-md border border-neutral-300 text-sm"
+            className="min-h-11 inline-flex items-center px-3 rounded-md border border-line-strong text-sm"
           >
             Print deck
           </Link>
@@ -479,9 +479,9 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {validation && validation.issues.length > 0 && (
-        <ul className="text-sm space-y-1 rounded-md border border-neutral-200 p-3" role="status" aria-live="polite">
+        <ul className="text-sm space-y-1 rounded-md border border-line p-3" role="status" aria-live="polite">
           {validation.issues.map((issue, i) => (
-            <li key={i} className={issue.severity === "error" ? "text-red-700" : "text-neutral-600"}>
+            <li key={i} className={issue.severity === "error" ? "text-danger-text" : "text-ink-secondary"}>
               {issue.message}
             </li>
           ))}
@@ -500,26 +500,28 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
           />
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
             {searchStatus === "not_searched" && (
-              <p className="text-sm text-neutral-500 col-span-full">
+              <p className="text-sm text-ink-secondary col-span-full">
                 Search or filter, then press Search to find cards to add.
               </p>
             )}
-            {searchStatus === "loading" && <p className="text-sm text-neutral-400 col-span-full">Loading…</p>}
+            {searchStatus === "loading" && <p className="text-sm text-ink-muted col-span-full">Loading…</p>}
             {searchStatus === "error" && (
-              <p className="text-sm text-red-600 col-span-full">Couldn&apos;t load search results.</p>
+              <p className="text-sm text-danger-text col-span-full">Couldn&apos;t load search results.</p>
             )}
             {searchStatus === "idle" &&
-              searchResults?.cards.map((card) => (
+              searchResults?.cards.map((card, index) => (
                 <AddCardTile
                   key={card.id}
                   card={card}
                   format={format}
                   onAdd={handleAddCard}
-                  onPreview={setPreviewCard}
+                  onPreview={() =>
+                    setPreview({ card, list: searchResults.cards, index })
+                  }
                 />
               ))}
             {searchStatus === "idle" && searchResults?.cards.length === 0 && (
-              <p className="text-sm text-neutral-500 col-span-full">No cards found.</p>
+              <p className="text-sm text-ink-secondary col-span-full">No cards found.</p>
             )}
           </div>
           {searchStatus === "idle" && searchResults && (
@@ -541,19 +543,19 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
             onChangeQuantity={handleChangeQuantity}
             onRemoveAll={handleRemoveAll}
             onAddCard={handleAddCard}
-            onPreviewCard={setPreviewCard}
+            onPreviewCard={(card, list, index) => setPreview({ card, list, index })}
           />
         </div>
       </div>
 
-      <section className="rounded-lg border border-neutral-200 p-4">
+      <section className="rounded-lg border border-line p-4">
         <h2 className="font-medium mb-3">Statistics</h2>
-        <DeckStatisticsPanel stats={statistics} />
+        <DeckStatisticsPanel stats={statistics} archetype={strategyArchetype || null} />
         {estimatedValue && (
-          <p className="text-sm text-neutral-500 border-t border-neutral-200 mt-4 pt-3">
+          <p className="text-sm text-ink-secondary border-t border-line mt-4 pt-3">
             Estimated value: <strong>${estimatedValue.total.toFixed(2)}</strong> (TCGplayer market price)
             {estimatedValue.missingPriceCount > 0 && (
-              <span className="text-neutral-400">
+              <span className="text-ink-muted">
                 {" "}
                 — {estimatedValue.missingPriceCount} card{estimatedValue.missingPriceCount === 1 ? "" : "s"}{" "}
                 have no price data and aren&apos;t included
@@ -563,7 +565,7 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
         )}
       </section>
 
-      <section className="rounded-lg border border-neutral-200 p-4">
+      <section className="rounded-lg border border-line p-4">
         <h2 className="font-medium mb-3">
           Deck quality {strategyArchetype ? `(vs. ${strategyArchetype} benchmarks)` : "(vs. general benchmarks)"}
         </h2>
@@ -584,11 +586,24 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
         deckId={deckId}
         knownCards={knownCards}
         onApplySwap={handleApplySwap}
-        onPreviewCard={setPreviewCard}
+        onPreviewCard={(card) => setPreview({ card, list: [card], index: 0 })}
         onResolvedCards={(cards) => setKnownCards((prev) => ({ ...prev, ...cards }))}
       />
 
-      {previewCard && <CardImageModal card={previewCard} onClose={() => setPreviewCard(null)} />}
+      {preview && (
+        <CardImageModal
+          card={preview.card}
+          cards={preview.list}
+          currentIndex={preview.index}
+          onNavigate={(index) =>
+            setPreview((p) => {
+              const nextCard = p?.list[index];
+              return p && nextCard ? { card: nextCard, list: p.list, index } : p;
+            })
+          }
+          onClose={() => setPreview(null)}
+        />
+      )}
     </div>
   );
 }

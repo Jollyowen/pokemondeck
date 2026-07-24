@@ -49,29 +49,29 @@ export function EvolutionLineSuggestions({
   }, [names.join("|")]);
 
   if (status === "loading") {
-    return <p className="text-xs text-neutral-400 px-2 py-1">Looking up evolution line…</p>;
+    return <p className="text-xs text-ink-muted px-2 py-1">Looking up evolution line…</p>;
   }
   if (status === "error") {
-    return <p className="text-xs text-red-600 px-2 py-1">Couldn&apos;t look up the evolution line.</p>;
+    return <p className="text-xs text-danger-text px-2 py-1">Couldn&apos;t look up the evolution line.</p>;
   }
   if (suggestions.length === 0) {
-    return <p className="text-xs text-neutral-400 px-2 py-1">No other printings found in the catalogue.</p>;
+    return <p className="text-xs text-ink-muted px-2 py-1">No other printings found in the catalogue.</p>;
   }
 
   return (
-    <ul className="space-y-1 pl-2 border-l-2 border-neutral-200 ml-2">
+    <ul className="space-y-1 pl-2 border-l-2 border-line ml-2">
       {suggestions.map((suggestion) => {
         const alreadyInDeck = deckCardIds.has(suggestion.id);
         return (
           <li key={suggestion.id} className="flex items-center gap-2 text-xs py-0.5">
             <span className="flex-1 truncate">
-              {suggestion.name} <span className="text-neutral-400">· {suggestion.setName}</span>
+              {suggestion.name} <span className="text-ink-muted">· {suggestion.setName}</span>
             </span>
             <button
               type="button"
               disabled={alreadyInDeck}
               onClick={() => onAdd(suggestion)}
-              className="min-h-11 sm:min-h-0 sm:h-7 px-2 rounded-md border border-neutral-300 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+              className="min-h-11 sm:min-h-0 sm:h-7 px-2 rounded-md border border-line-strong text-xs disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {alreadyInDeck ? "In deck" : "Add"}
             </button>

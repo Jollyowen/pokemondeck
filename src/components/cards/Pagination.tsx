@@ -18,18 +18,18 @@ export function Pagination({
     <div className="flex items-center justify-center gap-4 py-6">
       <button
         type="button"
-        className="min-h-11 min-w-11 px-4 rounded-md border border-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="min-h-11 min-w-11 px-4 rounded-md border border-line-strong disabled:opacity-40 disabled:cursor-not-allowed"
         onClick={() => onPageChange(page - 1)}
         disabled={page <= 1}
       >
         Previous
       </button>
-      <span className="text-sm text-neutral-600">
+      <span className="text-sm text-ink-secondary">
         Page {page} of {totalPages}
       </span>
       <button
         type="button"
-        className="min-h-11 min-w-11 px-4 rounded-md border border-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="min-h-11 min-w-11 px-4 rounded-md border border-line-strong disabled:opacity-40 disabled:cursor-not-allowed"
         onClick={() => onPageChange(page + 1)}
         disabled={page >= totalPages}
       >

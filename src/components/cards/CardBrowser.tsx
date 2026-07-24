@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CardSearchFilters, type CardFilterState } from "@/components/cards/CardSearchFilters";
 import { CardGrid, CardGridSkeleton } from "@/components/cards/CardGrid";
 import { Pagination } from "@/components/cards/Pagination";
+import { EnergyTypeIcon } from "@/components/cards/EnergyTypeIcon";
 import { isApiError } from "@/types/api";
 import type { Card, CardSet, CardSearchResult } from "@/types/card";
 
@@ -15,6 +16,11 @@ const DEFAULT_FILTERS: CardFilterState = {
   rarity: "",
   format: "all",
 };
+
+// Decorative only — a muted hint of the app's visual language on an
+// otherwise blank screen, not meant to represent anything specific about
+// the search that's about to happen.
+const PRESEARCH_MOTIF_TYPES = ["Fire", "Water", "Grass", "Lightning", "Psychic"];
 
 /**
  * The full search/filter/results/pagination experience for the card
@@ -99,14 +105,19 @@ export function CardBrowser({ heading = "Search cards" }: { heading?: string }) 
       <CardSearchFilters value={filters} onChange={setFilters} onSubmit={handleSearchSubmit} sets={sets} />
 
       {degraded && (
-        <p className="text-sm text-amber-700 bg-amber-50 rounded-md px-3 py-2">
+        <p className="text-sm text-warning-text bg-warning-bg rounded-md px-3 py-2">
           The live card catalogue is temporarily unavailable — showing previously cached
           results, which may be incomplete.
         </p>
       )}
 
       {status === "not_searched" && (
-        <div className="py-12 text-center text-neutral-500">
+        <div className="py-12 text-center text-ink-secondary">
+          <div className="flex justify-center gap-2 mb-4 opacity-30" aria-hidden="true">
+            {PRESEARCH_MOTIF_TYPES.map((type) => (
+              <EnergyTypeIcon key={type} type={type} size={22} />
+            ))}
+          </div>
           <p className="font-medium">Search or filter to see cards</p>
           <p className="text-sm mt-1">Enter a name, choose a filter, or just press Search to browse.</p>
         </div>
@@ -115,7 +126,7 @@ export function CardBrowser({ heading = "Search cards" }: { heading?: string }) 
       {status === "loading" && <CardGridSkeleton />}
 
       {status === "error" && (
-        <div className="py-12 text-center text-neutral-600" role="alert">
+        <div className="py-12 text-center text-ink-secondary" role="alert">
           <p className="font-medium">Couldn&apos;t load cards</p>
           <p className="text-sm mt-1">{errorMessage}</p>
         </div>

@@ -43,7 +43,7 @@ export default function NewDeckPage() {
   return (
     <div className="max-w-md space-y-6">
       <h1 className="text-2xl font-semibold">New deck</h1>
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-ink-secondary">
         Decks are saved to this browser. Use a share link to view a deck elsewhere.
         Account-based cross-device access is not included in this version.
       </p>
@@ -56,8 +56,8 @@ export default function NewDeckPage() {
           onClick={() => setMode("manual")}
           className={`min-h-11 px-4 rounded-full text-sm border ${
             mode === "manual"
-              ? "bg-neutral-900 text-white border-neutral-900"
-              : "border-neutral-300 text-neutral-700"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "border-line-strong text-ink-secondary"
           }`}
         >
           Start manually
@@ -69,8 +69,8 @@ export default function NewDeckPage() {
           onClick={() => setMode("ai")}
           className={`min-h-11 px-4 rounded-full text-sm border ${
             mode === "ai"
-              ? "bg-neutral-900 text-white border-neutral-900"
-              : "border-neutral-300 text-neutral-700"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "border-line-strong text-ink-secondary"
           }`}
         >
           AI assist
@@ -86,7 +86,7 @@ export default function NewDeckPage() {
             <input
               id="deck-name"
               type="text"
-              className="min-h-11 w-full rounded-md border border-neutral-300 px-3 text-sm"
+              className="min-h-11 w-full rounded-md border border-line-strong px-3 text-sm"
               placeholder="e.g. Charizard ex Control"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -105,8 +105,8 @@ export default function NewDeckPage() {
                   aria-pressed={format === f}
                   className={`min-h-11 px-4 rounded-full text-sm border ${
                     format === f
-                      ? "bg-neutral-900 text-white border-neutral-900"
-                      : "border-neutral-300 text-neutral-700"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-line-strong text-ink-secondary"
                   }`}
                 >
                   {f === "all" ? "All formats" : `${f[0]?.toUpperCase() ?? ""}${f.slice(1)}`}
@@ -116,7 +116,7 @@ export default function NewDeckPage() {
           </div>
 
           {error && (
-            <p className="text-sm text-red-600" role="alert">
+            <p className="text-sm text-danger-text" role="alert">
               {error}
             </p>
           )}
@@ -124,7 +124,7 @@ export default function NewDeckPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="min-h-11 px-5 rounded-md bg-neutral-900 text-white text-sm font-medium disabled:opacity-50"
+            className="min-h-11 px-5 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
           >
             {submitting ? "Creating…" : "Create deck"}
           </button>

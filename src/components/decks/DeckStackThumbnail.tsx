@@ -8,16 +8,16 @@ export function DeckStackThumbnail({ imageSmall, deckName }: { imageSmall: strin
   return (
     <div className="relative w-full aspect-[5/7] max-w-[140px] mx-auto" aria-hidden={imageSmall ? undefined : "true"}>
       {/* Back-most decorative card */}
-      <div className="absolute inset-0 translate-x-2 translate-y-3 rotate-6 rounded-lg border border-neutral-300 bg-neutral-100 shadow-sm" />
+      <div className="absolute inset-0 translate-x-2 translate-y-3 rotate-6 rounded-lg border border-line-strong bg-surface-muted-2 shadow-sm" />
       {/* Middle decorative card */}
-      <div className="absolute inset-0 translate-x-1 translate-y-1.5 rotate-3 rounded-lg border border-neutral-300 bg-neutral-50 shadow-sm" />
+      <div className="absolute inset-0 translate-x-1 translate-y-1.5 rotate-3 rounded-lg border border-line-strong bg-surface-muted shadow-sm" />
       {/* Top card — the real, user-chosen main Pokémon */}
-      <div className="absolute inset-0 rounded-lg border border-neutral-300 bg-white shadow-md overflow-hidden flex items-center justify-center">
+      <div className="absolute inset-0 rounded-lg border border-line-strong bg-surface shadow-md overflow-hidden flex items-center justify-center">
         {imageSmall ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imageSmall} alt={`${deckName} — featured card`} className="w-full h-full object-cover" />
         ) : (
-          <span className="text-xs text-neutral-400 text-center px-2">No main Pokémon set</span>
+          <span className="text-xs text-ink-muted text-center px-2">No main Pokémon set</span>
         )}
       </div>
     </div>

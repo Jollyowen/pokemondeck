@@ -21,9 +21,9 @@ const STATUS_LABEL: Record<DeckStatus, string> = {
 };
 
 const STATUS_COLOR: Record<DeckStatus, string> = {
-  draft: "bg-neutral-100 text-neutral-600",
-  complete: "bg-blue-50 text-blue-700",
-  format_legal: "bg-green-50 text-green-700",
+  draft: "bg-surface-muted-2 text-ink-secondary",
+  complete: "bg-info-bg text-info-text",
+  format_legal: "bg-success-bg text-success-text",
 };
 
 export default async function SharedDeckPage({
@@ -47,10 +47,10 @@ export default async function SharedDeckPage({
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs text-neutral-400 mb-1">Shared deck (read-only)</p>
+        <p className="text-xs text-ink-muted mb-1">Shared deck (read-only)</p>
         <h1 className="text-2xl font-semibold">{deck.name}</h1>
         {(deck.strategyArchetype || deck.strategyNotes) && (
-          <p className="text-sm text-neutral-500 mt-1">
+          <p className="text-sm text-ink-secondary mt-1">
             {deck.strategyArchetype && (
               <span className="capitalize">
                 {deck.strategyArchetype === "aggro"
@@ -70,19 +70,19 @@ export default async function SharedDeckPage({
           <span className={`text-xs rounded-full px-2.5 py-1 ${STATUS_COLOR[deck.status]}`}>
             {STATUS_LABEL[deck.status]}
           </span>
-          <span className="text-sm text-neutral-500 capitalize">
+          <span className="text-sm text-ink-secondary capitalize">
             {deck.format === "all" ? "All formats" : deck.format}
           </span>
-          <span className="text-sm text-neutral-500">{totalCount} / 60 cards</span>
+          <span className="text-sm text-ink-secondary">{totalCount} / 60 cards</span>
         </div>
       </div>
 
       <CopySharedDeckButton shareToken={token} />
 
       {validation.issues.length > 0 && (
-        <ul className="text-sm space-y-1 rounded-md border border-neutral-200 p-3">
+        <ul className="text-sm space-y-1 rounded-md border border-line p-3">
           {validation.issues.map((issue, i) => (
-            <li key={i} className={issue.severity === "error" ? "text-red-700" : "text-neutral-600"}>
+            <li key={i} className={issue.severity === "error" ? "text-danger-text" : "text-ink-secondary"}>
               {issue.message}
             </li>
           ))}
@@ -94,7 +94,7 @@ export default async function SharedDeckPage({
         <ReadOnlyDeckCardList entries={deck.cards} cardsById={cardsById} format={deck.format} />
       </div>
 
-      <section className="rounded-lg border border-neutral-200 p-4">
+      <section className="rounded-lg border border-line p-4">
         <h2 className="font-medium mb-3">Statistics</h2>
         <DeckStatisticsPanel stats={statistics} />
       </section>

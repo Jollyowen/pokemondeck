@@ -37,7 +37,7 @@ const COMMON_RARITIES = [
 ];
 
 const inputClass =
-  "min-h-11 w-full rounded-md border border-neutral-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-500";
+  "min-h-11 w-full rounded-md border border-line-strong px-3 text-sm focus:outline-none focus:ring-2 focus:ring-line-stronger";
 
 export function CardSearchFilters({
   value,
@@ -177,7 +177,7 @@ export function CardSearchFilters({
 
       <button
         type="submit"
-        className="min-h-11 rounded-md bg-neutral-900 text-white text-sm font-medium px-4"
+        className="min-h-11 rounded-md bg-primary text-primary-foreground text-sm font-medium px-4"
       >
         Search
       </button>
@@ -193,14 +193,14 @@ export function CardSearchFilters({
               aria-pressed={value.format === format}
               className={`min-h-11 px-4 rounded-full text-sm border ${
                 value.format === format
-                  ? "bg-neutral-900 text-white border-neutral-900"
-                  : "border-neutral-300 text-neutral-700"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-line-strong text-ink-secondary"
               }`}
             >
               {format === "all" ? "All formats" : `${format[0]?.toUpperCase() ?? ""}${format.slice(1)}`}
             </button>
           ))}
-          <span className="text-xs text-neutral-500">
+          <span className="text-xs text-ink-secondary">
             Cards not legal in the selected format stay visible, greyed out.
           </span>
         </fieldset>

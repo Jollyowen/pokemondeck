@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
+  timeout: 60_000, // was the 30s default — see DECISIONS.md
   testDir: "./tests/e2e",
   fullyParallel: true,
   reporter: "list",

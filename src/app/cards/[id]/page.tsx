@@ -43,7 +43,9 @@ export default async function CardDetailPage({
             // eslint-disable-next-line @next/next/no-img-element -- external, dynamic provider image
             <img src={card.imageLarge} alt={card.name} className="w-full rounded-lg" />
           ) : (
-            <div className="aspect-[63/88] w-full rounded-lg bg-neutral-100" />
+            <div className="aspect-[63/88] w-full rounded-lg bg-neutral-100 flex items-center justify-center text-sm text-neutral-400">
+              No image available
+            </div>
           )}
         </div>
 

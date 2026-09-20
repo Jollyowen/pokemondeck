@@ -2326,3 +2326,30 @@ tests). Findings and fixes:
   that the existing schema-validation tests don't already cover.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 211 unit tests
   unchanged and passing.
+
+## Fix: refinement addressed one listed feedback item and dropped another entirely
+
+- Real production log showed the exact failure mode: initial check had 3
+  hard issues (Pokémon count over range, total count 1 short, draw
+  support at 4 vs. a 6 minimum). Post-refinement: Pokémon count issue
+  fixed (21→18), but `draw: 4` was **completely unchanged** — the exact
+  same number, meaning the model didn't act on that feedback item at
+  all — and total count got *worse* (59→56), because the 3 Pokémon
+  removed to fix the range issue were never replaced with anything,
+  including the real draw-support candidates that were sitting right
+  there in the candidate pool waiting to be used for exactly this.
+- The refinement instructions already said to address "the listed
+  feedback gaps" (plural), but evidently that wasn't specific enough to
+  stop the model from treating multiple simultaneous issues as a single
+  problem to partially solve. Strengthened the wording explicitly:
+  address every item in the feedback list in one pass, not just the
+  first or easiest one; and when fixing one gap requires removing cards,
+  redirect the freed space toward another listed gap first (a concrete
+  example given: replacing a trimmed excess-Pokémon slot with a real
+  draw-support candidate, rather than just leaving the slot empty and
+  the deck short). `GENERATION_PROMPT_VERSION` bumped to `2.6.0`.
+- Separately investigating the user's report that a recently-released
+  set ("30th Celebration") may be missing or mis-flagged as not
+  Standard-legal — a concrete, checkable claim rather than a vague
+  "not enough Pokémon" impression, so verifying directly via the
+  database before assuming anything.

@@ -8,7 +8,7 @@ import { getEvolutionLineNames } from "@/lib/deck/evolution-line";
 import { toDeckReviewCard } from "@/lib/deck/review-cards";
 import { buildCandidatePoolSummary } from "@/lib/ai/candidate-pool-summary";
 import { getDeckGenerationProvider } from "@/lib/ai/provider-factory";
-import { buildVerifiedGeneratedDeck, ensureEvolutionPrerequisites } from "@/lib/ai/verify-generation";
+import { buildVerifiedGeneratedDeck, ensureEvolutionPrerequisites, topUpExistingCardsToSixty } from "@/lib/ai/verify-generation";
 import { computeDeckStatistics } from "@/lib/deck/statistics";
 import { computeDeckQuality } from "@/lib/ai/deck-quality";
 import { createDeck, updateOwnedDeck } from "@/lib/deck/repository";
@@ -250,6 +250,32 @@ export async function generateDeck(
     verifiedCards = refinedVerified;
     statistics = refinedStatistics;
     quality = refinedQuality;
+  }
+
+  // --- Stage 5: deterministic top-up to exactly 60, if still short ---
+  // Only reached after the single bounded refinement pass above has
+  // already run (or wasn't needed) — this never substitutes for asking
+  // the model to do better, it only guarantees the structural 60-card
+  // requirement the same way copy limits and evolution prerequisites are
+  // already guaranteed, using nothing but cards the model itself chose.
+  const totalBeforeTopUp = verifiedCards.reduce((sum, e) => sum + e.quantity, 0);
+  if (totalBeforeTopUp < 60) {
+    const profile = getArchetypeProfile(input.strategyArchetype);
+    verifiedCards = topUpExistingCardsToSixty(verifiedCards, candidatesById, {
+      pokemon: profile.pokemonRange,
+      trainer: profile.trainerRange,
+      energy: profile.energyRange,
+    });
+    const totalAfterTopUp = verifiedCards.reduce((sum, e) => sum + e.quantity, 0);
+    statistics = computeDeckStatistics(verifiedCards, candidatesById, input.format);
+    quality = computeDeckQuality(verifiedCards, candidatesById, statistics, input.strategyArchetype, input.format);
+    console.log("AI deck generation: deterministic top-up", {
+      pokemonName: input.pokemonName,
+      totalBeforeTopUp,
+      totalAfterTopUp,
+      reachedSixty: totalAfterTopUp >= 60,
+      finalHardIssueCount: quality.issues.filter((i) => i.severity === "hard").length,
+    });
   }
 
   // --- Save regardless of final quality outcome; issues are surfaced live in the editor, never hidden. ---

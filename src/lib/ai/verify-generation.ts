@@ -38,11 +38,10 @@ export type RawGeneratedCard = { cardId: string; count: number };
  *   one bounded refinement pass nudges it if it doesn't, but neither is
  *   a guarantee; this makes the upper bound a hard, structural one, the
  *   same way copy limits and the 60-card cap already are. Deliberately
- *   NOT enforcing a floor the same way — a deck genuinely short on
- *   Energy stays short and gets flagged (TOTAL_CARD_COUNT_LOW / hard
- *   quality checks), rather than this function inventing extra copies
- *   the model didn't choose, which would break the "never pad" rule
- *   above.
+ *   NOT enforcing a floor the same way itself — a deck genuinely short
+ *   on Energy after this function stays short here; see
+ *   `topUpExistingCardsToSixty` below for the separate, later step that
+ *   handles reaching exactly 60.
  */
 export function buildVerifiedGeneratedDeck(
   rawCards: RawGeneratedCard[],
@@ -97,6 +96,88 @@ export function buildVerifiedGeneratedDeck(
 
     totalCount += count;
     if (card.supertype === "Energy") energyCount += count;
+  }
+
+  return result;
+}
+
+/**
+ * Last-resort deterministic top-up to exactly 60 cards, run after
+ * `buildVerifiedGeneratedDeck` (and `ensureEvolutionPrerequisites`) if
+ * the deck is still short. A real production case had every composition
+ * check pass — Pokémon/Trainer/Energy all correctly within the
+ * archetype's ranges, draw/search minimums met — with the only failure
+ * being the raw total landing at 52-54 instead of 60, despite the
+ * model's own explanation claiming it summed to exactly 60.
+ *
+ * This does NOT invent any new card the model didn't choose — it only
+ * increases the quantity of entries ALREADY in the deck, which is a
+ * meaningfully smaller liberty than adding a new card type, and doesn't
+ * actually conflict with "never fabricate content the model didn't
+ * select": every card that ends up with a higher count is still one the
+ * model genuinely picked. Bounded the same way every other construction
+ * step in this app already is:
+ * - Per-name copy limits (4, or a card's own special limit) are
+ *   re-derived from the deck's current state and never exceeded.
+ * - Each category (Pokémon/Trainer/Energy) is never pushed past its
+ *   archetype's own range ceiling — this is what keeps the top-up from
+ *   undoing the very composition checks that were already passing.
+ * - If every entry is already at its own cap (copy limit or category
+ *   ceiling) with the deck still short, the function simply stops —
+ *   this can happen with a very thin selection, and the deck is saved
+ *   short and flagged exactly as before, never silently claimed as a
+ *   full 60 when it structurally couldn't reach one.
+ */
+export function topUpExistingCardsToSixty(
+  entries: DeckCardEntry[],
+  candidatesById: Record<string, Card>,
+  categoryRanges: { pokemon: [number, number]; trainer: [number, number]; energy: [number, number] },
+): DeckCardEntry[] {
+  let total = entries.reduce((sum, e) => sum + e.quantity, 0);
+  if (total >= DECK_SIZE) return entries;
+
+  const result = entries.map((e) => ({ ...e }));
+
+  const nameGroupTotals = new Map<string, number>();
+  const categoryTotals = { Pokémon: 0, Trainer: 0, Energy: 0 };
+  for (const e of result) {
+    const card = candidatesById[e.cardId];
+    if (!card) continue;
+    categoryTotals[card.supertype] += e.quantity;
+    if (!isBasicEnergy(card)) {
+      const key = normalizeCardName(card.name);
+      nameGroupTotals.set(key, (nameGroupTotals.get(key) ?? 0) + e.quantity);
+    }
+  }
+
+  const categoryRangeFor = (supertype: Card["supertype"]): [number, number] =>
+    supertype === "Pokémon" ? categoryRanges.pokemon : supertype === "Trainer" ? categoryRanges.trainer : categoryRanges.energy;
+
+  let progressMade = true;
+  while (total < DECK_SIZE && progressMade) {
+    progressMade = false;
+    for (const entry of result) {
+      if (total >= DECK_SIZE) break;
+
+      const card = candidatesById[entry.cardId];
+      if (!card) continue;
+
+      const [, categoryMax] = categoryRangeFor(card.supertype);
+      if (categoryTotals[card.supertype] >= categoryMax) continue;
+
+      if (!isBasicEnergy(card)) {
+        const key = normalizeCardName(card.name);
+        const limit = getSpecialSameNameCopyLimit(card) ?? DEFAULT_COPY_LIMIT;
+        const alreadyUsed = nameGroupTotals.get(key) ?? 0;
+        if (alreadyUsed >= limit) continue;
+        nameGroupTotals.set(key, alreadyUsed + 1);
+      }
+
+      entry.quantity += 1;
+      categoryTotals[card.supertype] += 1;
+      total += 1;
+      progressMade = true;
+    }
   }
 
   return result;

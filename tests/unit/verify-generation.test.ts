@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildVerifiedGeneratedDeck, ensureEvolutionPrerequisites } from "@/lib/ai/verify-generation";
+import { buildVerifiedGeneratedDeck, ensureEvolutionPrerequisites, topUpExistingCardsToSixty } from "@/lib/ai/verify-generation";
 import type { Card } from "@/types/card";
 
 function makeCard(overrides: Partial<Card> & { id: string; name: string }): Card {
@@ -298,5 +298,82 @@ describe("ensureEvolutionPrerequisites", () => {
     ];
     const result = ensureEvolutionPrerequisites(entries, candidates);
     expect(result.find((e) => e.cardId === "basic")).toBeUndefined();
+  });
+});
+
+describe("topUpExistingCardsToSixty", () => {
+  const ranges = { pokemon: [15, 20] as [number, number], trainer: [20, 30] as [number, number], energy: [8, 12] as [number, number] };
+
+  it("does nothing when already at 60", () => {
+    const candidates = { p: makeCard({ id: "p", name: "Blastoise", supertype: "Pokémon", subtypes: ["Basic"] }) };
+    const entries = [{ cardId: "p", cardName: "Blastoise", quantity: 60 }];
+    const result = topUpExistingCardsToSixty(entries, candidates, ranges);
+    expect(result).toEqual(entries);
+  });
+
+  it("only increases quantities of cards already present — never adds a new cardId", () => {
+    const candidates = {
+      energy: makeCard({ id: "energy", name: "Water Energy", supertype: "Energy", subtypes: ["Basic"] }),
+    };
+    const entries = [{ cardId: "energy", cardName: "Water Energy", quantity: 8 }];
+    const result = topUpExistingCardsToSixty(entries, candidates, ranges);
+    // Energy range caps at 12, so this alone can't reach 60 — but the
+    // key assertion is that no new cardId was introduced.
+    expect(result).toHaveLength(1);
+    expect(result[0]?.cardId).toBe("energy");
+  });
+
+  it("respects the copy limit — never pushes a non-Energy card above 4", () => {
+    const candidates = { t: makeCard({ id: "t", name: "Ultra Ball", supertype: "Trainer" }) };
+    const entries = [{ cardId: "t", cardName: "Ultra Ball", quantity: 3 }];
+    const result = topUpExistingCardsToSixty(entries, candidates, ranges);
+    expect(result[0]?.quantity).toBe(4);
+  });
+
+  it("respects each category's archetype range ceiling", () => {
+    const candidates = {
+      p: makeCard({ id: "p", name: "Blastoise", supertype: "Pokémon", subtypes: ["Basic"] }),
+      t: makeCard({ id: "t", name: "Switch", supertype: "Trainer" }),
+      e: makeCard({ id: "e", name: "Water Energy", supertype: "Energy", subtypes: ["Basic"] }),
+    };
+    // Pokémon and Trainer both already at a low count with plenty of
+    // per-name copy-limit room, but capped by the archetype ceiling.
+    const entries = [
+      { cardId: "p", cardName: "Blastoise", quantity: 4 }, // Pokémon range max is 20 but this is the only Pokémon candidate at copy-limit 4
+      { cardId: "t", cardName: "Switch", quantity: 4 }, // at copy limit already
+      { cardId: "e", cardName: "Water Energy", quantity: 8 },
+    ];
+    const result = topUpExistingCardsToSixty(entries, candidates, ranges);
+    const energy = result.find((e) => e.cardId === "e");
+    // Energy is uncapped by copy limit, so it should be the one absorbing
+    // the top-up, up to its own range ceiling of 12.
+    expect(energy?.quantity).toBe(12);
+    const total = result.reduce((sum, e) => sum + e.quantity, 0);
+    // Pokémon and Trainer are both stuck at their copy limit (4 each),
+    // Energy caps at 12 — total tops out at 4+4+12=20, well short of 60,
+    // and the function should stop gracefully rather than error or loop.
+    expect(total).toBe(20);
+  });
+
+  it("distributes the top-up across multiple entries in the same category", () => {
+    const candidates = {
+      a: makeCard({ id: "a", name: "Water Energy", supertype: "Energy", subtypes: ["Basic"] }),
+      b: makeCard({ id: "b", name: "Fire Energy", supertype: "Energy", subtypes: ["Basic"] }),
+    };
+    const entries = [
+      { cardId: "a", cardName: "Water Energy", quantity: 4 },
+      { cardId: "b", cardName: "Fire Energy", quantity: 4 },
+    ];
+    const result = topUpExistingCardsToSixty(entries, candidates, ranges);
+    const total = result.reduce((sum, e) => sum + e.quantity, 0);
+    expect(total).toBe(12); // energy range ceiling, split across both entries
+    expect(result.every((e) => e.quantity > 4)).toBe(true); // both actually grew
+  });
+
+  it("ignores an entry whose cardId no longer resolves to a real candidate", () => {
+    const candidates = { p: makeCard({ id: "p", name: "Blastoise", supertype: "Pokémon", subtypes: ["Basic"] }) };
+    const entries = [{ cardId: "ghost", cardName: "Ghost Card", quantity: 5 }];
+    const result = topUpExistingCardsToSixty(entries, candidates, ranges);
+    expect(result).toEqual(entries); // untouched, no crash
   });
 });

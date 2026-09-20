@@ -2586,3 +2586,48 @@ tests). Findings and fixes:
   shows which of the two actual causes this is.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 224 unit tests
   unchanged and passing (pure logging addition, no new branching logic).
+
+## Addition: deterministic top-up to exactly 60 cards, per explicit user request
+
+- User explicitly asked to force 60 cards, reversing the earlier
+  "never pad" stance for this specific, now well-evidenced case: after
+  every fix this session, a real generated deck had every composition
+  check pass (Pokémon/Trainer/Energy all within archetype range,
+  draw/search minimums met) and only the raw total falling short (52-54
+  of 60), despite the model's own explanation claiming it summed to
+  exactly 60.
+- Added `topUpExistingCardsToSixty` (`verify-generation.ts`), run as a
+  final Stage 5 after the existing construction + one bounded refinement
+  pass, only if the deck is still short. It does NOT add any new card
+  the model didn't choose — it only increases the quantity of entries
+  already in the deck, which is a genuinely smaller liberty than
+  inventing a new card, and doesn't actually conflict with the original
+  "never fabricate content the model didn't select" principle: every
+  card that ends up with a higher count is still one the model itself
+  picked. Bounded the same way every other construction step already is:
+  - Per-name copy limits (4, or a card's own special limit) are
+    re-derived from the deck's current state and never exceeded.
+  - Each category (Pokémon/Trainer/Energy) is never pushed past its own
+    archetype range ceiling — this is what keeps the top-up from undoing
+    the very composition checks that were already passing; it fills gaps
+    within already-valid ranges rather than blindly maxing out whichever
+    category has the most flexible limit.
+  - If every entry is already maxed (copy limit and/or category
+    ceiling) with the deck still short, the function stops gracefully —
+    a genuinely thin candidate selection can still end up short, saved
+    and flagged exactly as before, never silently claimed as a full 60
+    it structurally couldn't reach.
+- Wired into `generation-service.ts` as Stage 5, recomputing statistics
+  and quality afterward so the logged/final state reflects the actual
+  saved deck. Logged as `AI deck generation: deterministic top-up`
+  (before/after totals, whether 60 was actually reached, final hard
+  issue count).
+- New tests in `verify-generation.test.ts`: no-op when already at 60;
+  never introduces a new cardId; respects the per-name copy limit;
+  respects each category's archetype range ceiling and stops gracefully
+  rather than erroring when every entry is maxed; distributes a top-up
+  across multiple entries in the same category rather than dumping it
+  all into one; ignores an entry whose cardId no longer resolves to a
+  real candidate without crashing.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 230 unit tests pass
+  (224 previous + 6 new).

@@ -1,7 +1,7 @@
 import type { DeckGenerationInput } from "@/types/deck";
 
 /** Bump when instructions or expected output shape change meaningfully. */
-export const GENERATION_PROMPT_VERSION = "2.0.0";
+export const GENERATION_PROMPT_VERSION = "2.1.0";
 
 /**
  * Task instructions only — deliberately does NOT describe the output JSON
@@ -23,8 +23,8 @@ Rules:
 - Respect the standard 4-copy-per-name limit; Basic Energy is exempt and can appear in any quantity.
 - Include a reasonable Basic Pokémon foundation, not just the requested card's later evolutions.
 - A deck with zero Energy cards cannot function. If any Energy candidates are present in "candidateCards", your decklist MUST include a meaningful count of them — do not omit Energy just because Pokémon or Trainer candidates feel more limited.
-- Each candidate card includes a "legalInSelectedFormat" field. Prefer legal cards when they serve the deck equally well. You may still include an illegal candidate if it's genuinely the best or only option for the request (e.g. it's the only printing of the requested Pokémon available) — it will simply be flagged for the deck owner afterward, the same way it would be if they'd added it manually.
-- If "refinement" is present in the data block, this is a revision pass: adjust "previousCards" to address the listed "feedback" gaps, changing as few cards as possible. Same real-candidates-only rule applies.
+- Each candidate card includes a "legalInSelectedFormat" field, which will always be true — every candidate you're given is already filtered to be legal in the requested format, so there's nothing to weigh here.
+- If "refinement" is present in the data block, this is a revision pass: adjust "previousCards" to address the listed "feedback" gaps, changing as few cards as possible. Same real-candidates-only rule applies. To remove a card, omit it from your output entirely -- never include an entry with count 0 to represent a removal; a count must always be a positive integer.
 - Every array-typed field in your output must be an actual array — never a string, never markdown, never XML-like tags.
 - "deckName" should be a short, natural deck name (e.g. "Charizard ex Rush").
 - "explanation" should briefly describe the deck's strategy and win condition in plain language, grounded in the actual cards you chose.`;

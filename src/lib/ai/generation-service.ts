@@ -25,6 +25,15 @@ export class PokemonNotFoundError extends Error {
   }
 }
 
+export class PokemonNotLegalInFormatError extends Error {
+  constructor(pokemonName: string, format: DeckFormat) {
+    super(
+      `"${pokemonName}" has no printing legal in the ${format} format, so a ${format} deck can't be generated around it. Try a different format, or a different Pokémon.`,
+    );
+    this.name = "PokemonNotLegalInFormatError";
+  }
+}
+
 export type GenerateDeckInput = {
   format: DeckFormat;
   strategyArchetype: StrategyArchetype | null;
@@ -55,11 +64,14 @@ export async function generateDeck(
     throw new GenerationRateLimitError(env.AI_DECK_GENERATION_LIMIT_PER_DAY);
   }
 
-  const { targetCard, candidates, targetLegalInFormat } = await gatherDeckGenerationCandidates(
+  const { targetCard, candidates, foundButIllegal } = await gatherDeckGenerationCandidates(
     input.pokemonName,
     input.format,
   );
   if (!targetCard) {
+    if (foundButIllegal) {
+      throw new PokemonNotLegalInFormatError(input.pokemonName, input.format);
+    }
     throw new PokemonNotFoundError(input.pokemonName);
   }
   const target = targetCard; // re-bound so nested closures below see it as non-null
@@ -68,7 +80,6 @@ export async function generateDeck(
   console.log("AI deck generation: candidate pool gathered", {
     pokemonName: input.pokemonName,
     resolvedTargetName: target.name,
-    targetLegalInFormat,
     targetPrintingsInPool: targetPrintingIds.size,
     totalCandidates: candidates.length,
   });
@@ -168,12 +179,12 @@ export async function generateDeck(
   const finalDeck: Deck = updated ?? created;
   const result = await validateAndPersistStatus(finalDeck, ownerId);
 
+  // Every candidate offered to the model is now hard-filtered to be legal
+  // in the requested format (see gatherDeckGenerationCandidates), so
+  // there's no longer a "may include illegal cards" caveat to surface
+  // here — a generated deck is either fully format-legal, or generation
+  // fails fast with PokemonNotLegalInFormatError before any AI call happens.
   const explanationParts = [plan.justification, raw.explanation];
-  if (!targetLegalInFormat) {
-    explanationParts.unshift(
-      `Note: "${target.name}" has no printing legal in the ${input.format} format, so it (and this deck) may include cards flagged as not legal below — consider a different format if that matters for this deck.`,
-    );
-  }
 
   return { ...result, explanation: explanationParts.join(" ") };
 }

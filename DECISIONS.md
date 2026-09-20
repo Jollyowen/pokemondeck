@@ -1757,3 +1757,47 @@ tests). Findings and fixes:
 - Confirms the retry/skip/idempotent-upsert design introduced for the
   original pokemontcg.io rate-limit issue continues to work correctly
   under the current TCGdex provider.
+
+## Fix: AI deck generation could exclude the requested Pokémon, patched with a stricter approach
+
+- User-supplied patch (`format-legality-and-generation-fix.patch`) revises
+  the generation-candidate format-legality handling introduced in the
+  earlier "requested Pokémon silently excluded from its own generated
+  deck" fix (see above).
+- **Reverses the earlier approach**: that fix removed the format-legality
+  filter from candidate gathering entirely, letting illegal candidates
+  through and relying on the model to prefer legal ones (flagged
+  afterward via normal `FORMAT_ILLEGAL` validation). This patch instead:
+  - Resolves the target Pokémon **only from printings actually legal in
+    the requested format** (`legalTargetMatches[0]`, no fallback to an
+    illegal printing).
+  - Distinguishes "no card by this name exists at all" from "it exists,
+    just not legal in this format" via a new `foundButIllegal` flag, and
+    fails fast with a new `PokemonNotLegalInFormatError` (404,
+    `POKEMON_NOT_LEGAL_IN_FORMAT`) in the latter case, rather than
+    generating a deck around an illegal printing.
+  - Hard-filters **every** candidate by `isCardLegalInFormat`, not just
+    the target — a generated deck's cards are now always fully legal in
+    the requested format, or generation fails before any AI call happens.
+  - Removes the now-unnecessary "may include cards flagged as not legal"
+    caveat previously prepended to the generation explanation banner.
+  - `GENERATION_PROMPT_VERSION` bumped to `2.1.0`; the
+    `legalInSelectedFormat` field is now always `true`, and the prompt
+    instructions were updated to say so rather than asking the model to
+    weigh legal vs. illegal candidates.
+- **Also fixes an unrelated, separately-discovered schema-strictness bug**
+  in the same area: `parseAndValidateGenerationOutput` previously rejected
+  an entire generation response if *any* single card entry was malformed
+  (e.g. the model zeroing out a card's count during a refinement pass to
+  signal "remove this," rather than omitting the entry — not explicitly
+  forbidden by the prompt at the time). Now validates the outer shape
+  strictly (`deckName`/`explanation`/`cards` must be present and an
+  array), but drops individual malformed card entries rather than failing
+  the whole response — matching the leniency already used one layer
+  downstream in `buildVerifiedGeneratedDeck`. Still returns `null`
+  (genuine failure) if zero entries survive. The refinement prompt
+  instructions were also updated to explicitly say "omit to remove, never
+  count: 0."
+- Verified before pushing: `tsc --noEmit` clean, `eslint` clean, all 187
+  unit tests pass (185 previous + 2 new, covering the mixed-malformed-
+  entries case and the all-entries-malformed case).

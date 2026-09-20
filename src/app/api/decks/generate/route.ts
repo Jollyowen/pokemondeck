@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateDeckSchema } from "@/schemas/deck";
-import { generateDeck, PokemonNotFoundError } from "@/lib/ai/generation-service";
+import { generateDeck, PokemonNotFoundError, PokemonNotLegalInFormatError } from "@/lib/ai/generation-service";
 import { AiProviderError, AiReviewOutputError, GenerationRateLimitError } from "@/lib/ai/errors";
 import { getOrCreateOwnerId } from "@/lib/owner";
 import { withApiErrorHandling } from "@/lib/api/with-error-handling";
@@ -40,6 +40,10 @@ export const POST = withApiErrorHandling(async (request: NextRequest) => {
     }
     if (error instanceof PokemonNotFoundError) {
       const body: ApiError = { error: { code: "POKEMON_NOT_FOUND", message: error.message } };
+      return NextResponse.json(body, { status: 404 });
+    }
+    if (error instanceof PokemonNotLegalInFormatError) {
+      const body: ApiError = { error: { code: "POKEMON_NOT_LEGAL_IN_FORMAT", message: error.message } };
       return NextResponse.json(body, { status: 404 });
     }
     if (error instanceof AiReviewOutputError || error instanceof AiProviderError) {

@@ -163,7 +163,7 @@ export type GenerationCandidateResult =
 export async function gatherDeckGenerationCandidates(
   pokemonName: string,
   format: DeckFormat,
-): Promise<GenerationCandidateResult & { targetLegalInFormat: boolean }> {
+): Promise<GenerationCandidateResult & { targetLegalInFormat: boolean; foundButIllegal: boolean }> {
   // pageSize is deliberately much higher than the default here: results
   // are ordered alphabetically by set ID, not by recency, so a low limit
   // could genuinely miss the specific (often more recent) printing that's
@@ -172,24 +172,33 @@ export async function gatherDeckGenerationCandidates(
   // grounded in, so it's worth being thorough here specifically.
   const targetMatches = await findExactNameMatches(pokemonName, "Pokémon", 100);
   const legalTargetMatches = targetMatches.filter((c) => isCardLegalInFormat(c, format));
-  const targetCard = (legalTargetMatches[0] ?? targetMatches[0]) ?? null;
-  if (!targetCard) return { targetCard: null, candidates: [], targetLegalInFormat: false };
+  const targetCard = legalTargetMatches[0] ?? null;
+  if (!targetCard) {
+    // Distinguish "no card by this name exists at all" from "it exists,
+    // just not legal in this format" so the caller can give an accurate
+    // error instead of a generic "not found".
+    return {
+      targetCard: null,
+      candidates: [],
+      targetLegalInFormat: false,
+      foundButIllegal: targetMatches.length > 0,
+    };
+  }
 
   const candidates = new Map<string, Card>();
   function addIfNew(card: Card) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) return;
-    // Deliberately NOT filtering by format legality here. Doing so
-    // previously meant that if the only catalogue printings of the
-    // requested Pokémon weren't legal in the chosen format, the target
-    // was silently excluded from its own generated deck while still
-    // being used to steer the rest of the search — a real bug reported
-    // in practice. Format legality is non-destructive everywhere else in
-    // this app (flagged, never silently removed); generation candidates
-    // now follow the same rule. The model sees each candidate's
-    // legalInSelectedFormat flag and is nudged to prefer legal cards; any
-    // illegal card that ends up in the final deck shows up as a normal
-    // FORMAT_ILLEGAL validation issue once it lands in the editor, exactly
-    // like a manually-built deck would.
+    // Strict format-legality filter: a generated deck must only ever be
+    // built from candidates that are actually legal in the requested
+    // format (or format === "all", where isCardLegalInFormat always
+    // returns true). An earlier version of this function deliberately
+    // allowed illegal candidates through — that was to fix a real bug
+    // where the requested Pokémon itself got excluded from its own
+    // candidate pool (see DECISIONS.md). That's now handled correctly
+    // above: the target is resolved only from its legal printings, with
+    // a clear error if none exist, rather than by loosening the filter
+    // for every other candidate too.
+    if (!isCardLegalInFormat(card, format)) return;
     candidates.set(card.id, card);
   }
 
@@ -241,6 +250,7 @@ export async function gatherDeckGenerationCandidates(
   return {
     targetCard,
     candidates: candidateList,
-    targetLegalInFormat: legalTargetMatches.length > 0,
+    targetLegalInFormat: true,
+    foundButIllegal: false,
   };
 }

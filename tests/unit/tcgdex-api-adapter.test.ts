@@ -129,6 +129,20 @@ describe("tcgdex normalizeCard", () => {
     });
     expect(card.rules).toEqual([]);
   });
+
+  it("maps regulationMark through, defaulting to null when absent", () => {
+    // Captured purely for legality-debugging transparency — the real
+    // 2026 Standard rotation is driven by each printing's own
+    // regulation mark (per pokemon.com's rotation announcement), not by
+    // how recently its set released. Not used to compute legality
+    // itself; TCGdex's own legal.standard/legal.expanded stay the
+    // actual source of truth.
+    const withMark = normalizeCard({ id: "a-11", name: "Test", category: "Pokemon", regulationMark: "I" });
+    expect(withMark.regulationMark).toBe("I");
+
+    const withoutMark = normalizeCard({ id: "a-12", name: "Test", category: "Pokemon" });
+    expect(withoutMark.regulationMark).toBeNull();
+  });
 });
 
 describe("tcgdex extractPrice", () => {

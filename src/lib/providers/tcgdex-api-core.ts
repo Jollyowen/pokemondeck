@@ -247,6 +247,7 @@ export function normalizeCard(raw: RawCard): Card {
     // prose rather than real card effects.
     rules: raw.effect ? [raw.effect] : [],
     rarity: raw.rarity ?? null,
+    regulationMark: raw.regulationMark ?? null,
     legalities: {
       standard: mapLegality(raw.legal?.standard),
       expanded: mapLegality(raw.legal?.expanded),

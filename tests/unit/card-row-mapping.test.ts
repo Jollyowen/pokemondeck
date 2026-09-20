@@ -26,6 +26,7 @@ function makeCard(overrides: Partial<Card> & { id: string; name: string }): Card
     convertedRetreatCost: 2,
     rules: ["Some rule text."],
     rarity: "Rare Holo",
+    regulationMark: null,
     legalities: { standard: "legal", expanded: "not_legal", unlimited: "legal" },
     price: { variant: "normal", market: 4.5, low: 2, high: 10, currency: "USD", url: null, updatedAt: null },
     ...overrides,
@@ -50,6 +51,26 @@ describe("cardToRow / rowToCard round-trip", () => {
     expect(row.provider).toBe("tcgdex");
     const roundTripped = rowToCard(row);
     expect(roundTripped.provider).toBe("tcgdex");
+  });
+
+  it("round-trips a real regulation mark", () => {
+    // Captured purely for legality-debugging transparency — see the
+    // Card.regulationMark doc comment for why this isn't used to
+    // compute legality itself.
+    const card = makeCard({ id: "me01-1", name: "Test", regulationMark: "I" });
+    const row = cardToRow(card, "2026/01/01");
+    expect(row.details.regulationMark).toBe("I");
+    const roundTripped = rowToCard(row);
+    expect(roundTripped.regulationMark).toBe("I");
+  });
+
+  it("falls back to null when a card has no regulationMark set at all (older synced rows, legacy provider)", () => {
+    const card = makeCard({ id: "old-1", name: "Old Card" });
+    delete (card as { regulationMark?: string | null }).regulationMark;
+    const row = cardToRow(card, "2019/01/01");
+    expect(row.details.regulationMark).toBeNull();
+    const roundTripped = rowToCard(row);
+    expect(roundTripped.regulationMark).toBeNull();
   });
 
   it("preserves a card with null/empty optional fields", () => {

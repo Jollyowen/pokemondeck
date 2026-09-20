@@ -11,6 +11,7 @@ export type CardDetailsJson = {
   convertedRetreatCost: number;
   rules: string[];
   price: Card["price"];
+  regulationMark: string | null;
 };
 
 export type CardRow = {
@@ -73,6 +74,7 @@ export function cardToRow(card: Card, setReleaseDate: string): CardRow {
       convertedRetreatCost: card.convertedRetreatCost,
       rules: card.rules,
       price: card.price,
+      regulationMark: card.regulationMark ?? null,
     },
   };
 }
@@ -112,6 +114,7 @@ export function rowToCard(row: CardRow): Card {
     convertedRetreatCost: row.details.convertedRetreatCost,
     rules: row.details.rules,
     rarity: row.rarity,
+    regulationMark: row.details.regulationMark ?? null,
     legalities: {
       standard: row.legality_standard as Card["legalities"]["standard"],
       expanded: row.legality_expanded as Card["legalities"]["expanded"],

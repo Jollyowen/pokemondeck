@@ -2353,3 +2353,55 @@ tests). Findings and fixes:
   Standard-legal — a concrete, checkable claim rather than a vague
   "not enough Pokémon" impression, so verifying directly via the
   database before assuming anything.
+
+## Investigation: "30th Celebration" set not Standard-legal — checked against the real 2026 rotation rules, likely correct data
+
+- User asked why the "30th Celebration"/"30th Classic Collection" sets
+  (released 2026-09-16, very recently) show `not_legal` for Standard
+  across every card checked, given they believed a newly-released set
+  should be in format.
+- Checked the official 2026 Standard rotation announcement
+  (pokemon.com) rather than assume either way. The actual rule: **a
+  card's legality is determined by its own printed regulation mark
+  ("G" rotated out; "H"/"I"/"J" legal), not by how recently its set
+  released.** The announcement's own example makes the point directly —
+  an old-mark reprint of Boss's Orders stays illegal even though a
+  different, current-mark reprint of the same card is legal; set
+  recency doesn't override a card's own mark.
+- Anniversary/celebration-themed sets like these are specifically built
+  to reprint classic card *designs*, which commonly carry an old (or no)
+  regulation mark rather than a current one. A September 2026 release
+  date doesn't make a reprinted classic-era card Standard-legal if the
+  print itself carries an old mark. Given that, `not_legal` for these
+  two sets is very plausibly **accurate data, not a bug** — this is
+  exactly the "recency ≠ legality" misconception the official rules
+  explicitly call out.
+- **Made this independently checkable rather than just argued**: added
+  `Card.regulationMark` (optional, `string | null`) — TCGdex's schema
+  already exposes a `regulationMark` field per card
+  (`tcgdex.dev/reference/card`) that wasn't being captured anywhere.
+  Mapped through `normalizeCard` (tcgdex-api-core.ts), persisted via
+  `CardDetailsJson` in `card-row-mapping.ts` (the same catch-all JSON
+  column pattern already used for every other non-searched field), and
+  read back on `rowToCard`. Deliberately does NOT compute legality from
+  this field anywhere — TCGdex's own `legal.standard`/`legal.expanded`
+  booleans remain the actual source of truth used everywhere else in the
+  app; this is purely so a future legality question like this one can be
+  checked directly against the real regulation mark instead of inferred
+  from an external article. Kept optional (not a required field) so
+  every existing test fixture and older already-synced row stays valid
+  without needing a fixture update everywhere a `Card` is constructed.
+- Deliberately left out of `toDeckReviewCard`'s AI-facing allowlist
+  (`review-cards.ts`) — same discipline already used to keep `price` out
+  of the AI payload; this is a debugging aid for us, not something the
+  model needs.
+- New tests: `tcgdex-api-adapter.test.ts` covers `normalizeCard` mapping
+  a real mark through and defaulting to `null` when absent;
+  `card-row-mapping.test.ts` covers a real mark round-tripping through
+  `cardToRow`/`rowToCard`, and falling back to `null` for an older card
+  with no mark captured at all (also fixed the pre-existing "preserves
+  every field" round-trip test's fixture, which needed an explicit
+  `regulationMark: null` to stay meaningful once the row-mapping always
+  writes a concrete `null` rather than leaving the column absent).
+- Verified: `tsc --noEmit` clean, `eslint` clean, 214 unit tests pass
+  (211 previous + 3 new).

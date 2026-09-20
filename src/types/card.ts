@@ -51,6 +51,21 @@ export type Card = {
   convertedRetreatCost: number;
   rules: string[];
   rarity: string | null;
+  /**
+   * Real legality driver per the 2026 Standard rotation rules
+   * (pokemon.com's official rotation announcement): a card's legality is
+   * determined by ITS OWN regulation mark, not by how recently its set
+   * released — an anniversary/reprint set released yesterday can still
+   * be full of old-mark (or unmarked) reprints and correctly not be
+   * Standard-legal. Captured purely for transparency/debugging (e.g.
+   * confirming *why* a specific printing shows not_legal) — TCGdex's own
+   * `legal.standard`/`legal.expanded` booleans are still the actual
+   * source of truth used everywhere else in this app; nothing computes
+   * legality FROM this field. Optional since older synced rows (from
+   * before this field was captured) and the legacy pokemontcg.io
+   * provider won't have it.
+   */
+  regulationMark?: string | null;
   legalities: {
     standard: CardLegality;
     expanded: CardLegality;

@@ -2134,3 +2134,65 @@ tests). Findings and fixes:
   treats everything as legal when format is `"all"`.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 207 unit tests pass
   (203 previous + 4 new).
+
+## Fix: root cause was a new game era, not a bug — added role-based (name-agnostic) Trainer discovery
+
+- Directly queried the live database via Supabase's SQL editor for every
+  "Professor's Research" printing: every single row showed
+  `legality_standard: "not_legal"`, including one from a set released as
+  recently as July 2025 — while `legality_expanded` was correctly
+  populated as `"legal"` for the same rows. That ruled out both of the
+  last two hypotheses (env var misconfiguration, a mapping/sync bug):
+  the data itself is internally consistent (expanded legality varies
+  correctly; only standard is uniformly excluded), which is what real
+  rotation looks like, not corrupted data.
+- Cross-referenced against the earlier sync log, which listed sets named
+  `A3`, `A3a`, `A4`, `B1`, `B1a`, `B2`, `me01`-`me05`, `30th` — a
+  completely different naming scheme from the `sv`-prefixed sets every
+  failing staple's printings came from. **Conclusion: the game has moved
+  into a new block/era since the sv-prefixed sets released, and current
+  Standard rotation has moved past all of them.** Professor's Research,
+  Iono, Cynthia, and most of the Ball-family search cards are correctly,
+  currently not Standard-legal — this is real data, not a bug. (Some
+  staple names — Judge, Ultra Ball, Switch, Rare Candy, Boss's Orders —
+  did still resolve, presumably via a reprint that also exists in the
+  newer era's sets.)
+- This reframes the whole multi-round investigation: the ordering bug
+  fixed a few commits ago was real and worth fixing, but the dominant
+  remaining cause was that `STAPLE_DRAW_TRAINER_NAMES` /
+  `STAPLE_SEARCH_TRAINER_NAMES` were curated from general Pokémon TCG
+  knowledge that has no visibility into whatever the new era's actual
+  staple cards are named — knowledge that can't be "fixed" by picking a
+  different hardcoded list, since the same problem will just recur at
+  the next rotation.
+- **Fix: search by role instead of by name.** Added
+  `findRoleBasedTrainerCandidates` — queries the 100 most-recent Trainer
+  cards (no name filter), filters to legal-in-format via the same
+  `takeLegal`, then classifies each with the existing
+  `isDrawSupportCard`/`isSearchSupportCard` text-heuristic functions
+  (`text-heuristics.ts`, already used elsewhere in this app for deck
+  statistics) rather than matching against a fixed name list. This
+  self-adapts to any future rotation automatically — it finds whatever
+  the *current* era's actual draw/search staples are by what their text
+  does, not by whether their name happens to match something curated
+  months or years ago. Added to both `gatherDeckGenerationCandidates`
+  and `gatherCandidateCards`, alongside (not replacing) the existing
+  name-based staple lists — those still contribute real value for
+  evergreen reprints, no reason to discard that.
+- Added `roleBasedTrainersFound` to the diagnostics/log output so the
+  next attempt shows directly how many real draw/search candidates this
+  new path is actually finding.
+- Deliberately did not attempt an equivalent role-based search for
+  "engine" Pokémon (`STAPLE_UTILITY_POKEMON_NAMES` — Bibarel, Manaphy):
+  there's no existing text-heuristic for "ability-based support Pokémon"
+  the way there is for draw/search Trainers, and inventing one carries a
+  real risk of false positives across the huge variety of real Pokémon
+  abilities. Left as a known, smaller remaining gap rather than guessed
+  at without the same evidence-based confidence as the Trainer fix.
+- No new unit tests: `findRoleBasedTrainerCandidates` is a thin
+  composition of already-tested pieces (`takeLegal`, the existing
+  `isDrawSupportCard`/`isSearchSupportCard` heuristics, both already
+  covered elsewhere) around a live `searchLocalCards` call — same
+  testing-boundary precedent as the rest of this file.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 207 unit tests
+  unchanged and passing.

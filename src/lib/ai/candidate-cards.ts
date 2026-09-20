@@ -5,6 +5,7 @@ import { searchLocalCards } from "@/lib/cards/local-card-repository";
 import { getEvolutionLineNames } from "@/lib/deck/evolution-line";
 import { isBasicEnergy } from "@/lib/deck/validate";
 import { isCardLegalInFormat } from "@/lib/format-legality";
+import { isDrawSupportCard, isSearchSupportCard } from "@/lib/deck/text-heuristics";
 
 const MAX_CANDIDATES = 30;
 
@@ -112,6 +113,53 @@ export function takeLegal(cards: Card[], format: DeckFormat, n: number): Card[] 
 }
 
 /**
+ * Finds real, currently-legal draw- and search-support Trainers by
+ * classifying actual card text (the same `isDrawSupportCard`/
+ * `isSearchSupportCard` heuristics used elsewhere in this app), rather
+ * than by matching a hardcoded list of card names.
+ *
+ * Why this exists alongside the STAPLE_*_TRAINER_NAMES lists above: a
+ * real investigation (tracing a thin-candidate-pool report all the way
+ * to the underlying legality data) found that most of those hardcoded
+ * staple names — Professor's Research, Iono, Cynthia, most of the Ball
+ * family — are correctly showing zero Standard-legal printings, because
+ * the game has moved into a newer block/era since those sets released
+ * (evidenced by a completely different set-naming scheme appearing in
+ * the synced catalogue — see DECISIONS.md). That's real, current data,
+ * not a bug — but it means a fixed list of "well-known staples" curated
+ * from general knowledge will keep going stale every time the format
+ * rotates, with no way to know the new era's actual staple names ahead
+ * of time. Searching by what a card's text actually DOES, against
+ * whatever's actually legal right now, self-adapts to any future
+ * rotation automatically. Kept as an addition to the name-based lists,
+ * not a replacement — some of those names did still resolve (Judge,
+ * Ultra Ball, Switch, Rare Candy, Boss's Orders all found legal
+ * printings), so there's no reason to throw that away.
+ */
+async function findRoleBasedTrainerCandidates(
+  format: DeckFormat,
+  perRole: number,
+): Promise<{ draw: Card[]; search: Card[] }> {
+  try {
+    // Ordered newest-first with no name/type filter — pageSize wide
+    // enough that, after filtering to whatever's actually legal right
+    // now, there's a real sample to classify from.
+    const result = await searchLocalCards({ supertype: "Trainer", pageSize: 100 });
+    const legal = takeLegal(result.cards, format, 100);
+    const draw: Card[] = [];
+    const search: Card[] = [];
+    for (const card of legal) {
+      if (draw.length < perRole && isDrawSupportCard(card)) draw.push(card);
+      if (search.length < perRole && isSearchSupportCard(card)) search.push(card);
+      if (draw.length >= perRole && search.length >= perRole) break;
+    }
+    return { draw, search };
+  } catch {
+    return { draw: [], search: [] }; // best-effort, same discipline as every other search in this file
+  }
+}
+
+/**
  * Builds a bounded candidate pool: real cards from the provider that are
  * plausibly relevant to this deck's actual composition, capped well below
  * what would make the prompt unwieldy. The model is only ever allowed to
@@ -172,6 +220,15 @@ export async function gatherCandidateCards(
     if (candidates.size >= MAX_CANDIDATES) break;
     const matches = await findExactNameMatches(name, "Trainer");
     takeLegal(matches, format, 1).forEach(addIfNew);
+  }
+
+  // 4b. Role-based draw/search support, found by what a card's text
+  // actually does rather than by name — see findRoleBasedTrainerCandidates'
+  // doc comment for why this exists alongside the name-based staples above.
+  if (candidates.size < MAX_CANDIDATES) {
+    const roleBased = await findRoleBasedTrainerCandidates(format, 3);
+    roleBased.draw.forEach(addIfNew);
+    roleBased.search.forEach(addIfNew);
   }
 
   // 5. Basic Energy matching the Pokémon types already in the deck, if energy count looks low.
@@ -242,6 +299,8 @@ export type CandidateGatheringDiagnostics = {
   /** Staple names that WERE found by name but had zero legal-in-format printings among the fetched results — points at legality data/rotation, not a matching bug. */
   staplesFoundButIllegal: string[];
   totalStaplesSearched: number;
+  /** How many draw/search Trainers the role-based (name-agnostic) search found — the resilience fallback for when the hardcoded staple names have rotated out. */
+  roleBasedTrainersFound: number;
 };
 
 /**
@@ -285,7 +344,13 @@ export async function gatherDeckGenerationCandidates(
       candidates: [],
       targetLegalInFormat: false,
       foundButIllegal: targetMatches.length > 0,
-      diagnostics: { bySupertype: {}, staplesMissed: [], staplesFoundButIllegal: [], totalStaplesSearched: 0 },
+      diagnostics: {
+        bySupertype: {},
+        staplesMissed: [],
+        staplesFoundButIllegal: [],
+        totalStaplesSearched: 0,
+        roleBasedTrainersFound: 0,
+      },
     };
   }
 
@@ -389,6 +454,17 @@ export async function gatherDeckGenerationCandidates(
     legal.forEach(addIfNew);
   }
 
+  // Role-based draw/search support, found by what a card's text actually
+  // does rather than by name — see findRoleBasedTrainerCandidates' doc
+  // comment for why this exists alongside the name-based staples above.
+  let roleBasedTrainersFound = 0;
+  if (candidates.size < GENERATION_MAX_CANDIDATES) {
+    const roleBased = await findRoleBasedTrainerCandidates(format, 4);
+    roleBasedTrainersFound = roleBased.draw.length + roleBased.search.length;
+    roleBased.draw.forEach(addIfNew);
+    roleBased.search.forEach(addIfNew);
+  }
+
   // Basic Energy matching the target's type(s).
   for (const type of targetCard.types) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
@@ -422,6 +498,12 @@ export async function gatherDeckGenerationCandidates(
     candidates: candidateList,
     targetLegalInFormat: true,
     foundButIllegal: false,
-    diagnostics: { bySupertype, staplesMissed, staplesFoundButIllegal, totalStaplesSearched: staplesSearched },
+    diagnostics: {
+      bySupertype,
+      staplesMissed,
+      staplesFoundButIllegal,
+      totalStaplesSearched: staplesSearched,
+      roleBasedTrainersFound,
+    },
   };
 }

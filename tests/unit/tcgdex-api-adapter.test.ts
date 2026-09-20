@@ -77,6 +77,58 @@ describe("tcgdex normalizeCard", () => {
     });
     expect(card.legalities).toEqual({ standard: "legal", expanded: "not_legal", unlimited: "unknown" });
   });
+
+  it("maps a Trainer card's effect text to rules — real bug fix: this used to read the wrong field entirely", () => {
+    // Real reported bug: every current-era Trainer card's rules array
+    // came back empty, which made the draw/search-support text
+    // heuristics structurally blind. Root cause was mapping `rules` from
+    // `description` (Pokémon-only flavor text per TCGdex's schema) and
+    // never reading `effect` (the actual Trainer/Energy rules text) at
+    // all — confirmed against TCGdex's own published Card reference.
+    const card = normalizeCard({
+      id: "a-7",
+      name: "Ultra Ball",
+      category: "Trainer",
+      trainerType: "Item",
+      effect: "Discard 2 cards from your hand. If you do, search your deck for a Pokémon.",
+    });
+    expect(card.rules).toEqual(["Discard 2 cards from your hand. If you do, search your deck for a Pokémon."]);
+  });
+
+  it("maps an Energy card's effect text to rules the same way", () => {
+    const card = normalizeCard({
+      id: "a-8",
+      name: "Double Turbo Energy",
+      category: "Energy",
+      energyType: "Special",
+      effect: "This card provides 2 Colorless Energy.",
+    });
+    expect(card.rules).toEqual(["This card provides 2 Colorless Energy."]);
+  });
+
+  it("does NOT fall back to description (flavor text) for a Trainer card's rules", () => {
+    // Trainer cards don't have `description` at all per TCGdex's schema,
+    // but this guards against ever reintroducing that fallback — flavor
+    // text isn't rules text and shouldn't be treated as such even if a
+    // future API response happened to include both fields.
+    const card = normalizeCard({
+      id: "a-9",
+      name: "Some Trainer",
+      category: "Trainer",
+      description: "A flavorful description, not a card effect.",
+    });
+    expect(card.rules).toEqual([]);
+  });
+
+  it("gives a Pokémon card with no effect an empty rules array (description is flavor text, not rules)", () => {
+    const card = normalizeCard({
+      id: "a-10",
+      name: "Furret",
+      category: "Pokemon",
+      description: "It makes a nest to suit its long and skinny body.",
+    });
+    expect(card.rules).toEqual([]);
+  });
 });
 
 describe("tcgdex extractPrice", () => {

@@ -2196,3 +2196,58 @@ tests). Findings and fixes:
   testing-boundary precedent as the rest of this file.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 207 unit tests
   unchanged and passing.
+
+## Fix: the actual root cause, confirmed against TCGdex's own docs — Trainer/Energy rules text was never mapped
+
+- Diagnostic SQL directly against the live database (`details->'rules'`
+  for the most recent Standard-legal Trainer cards) showed empty arrays
+  across the board — the previous entry's "new game era" explanation
+  covered why old staple *names* had rotated out, but didn't explain why
+  the *role-based* search (which doesn't care about names at all) also
+  found zero draw/search matches. This is why: the underlying data these
+  heuristics classify against was empty for every Trainer/Energy card,
+  not just the ones whose names happened to be stale.
+- Fetched TCGdex's own published Card reference
+  (tcgdex.dev/reference/card) rather than continue guessing, and
+  confirmed a real, clean mapping bug: **`description` is Pokémon-only
+  flavor text** ("It makes a nest to suit its long and skinny body...")
+  — Trainer cards don't even have this field per the schema. **The
+  actual rules/effect text for Trainer and Energy cards is a separate,
+  required field called `effect`.** `normalizeCard` in
+  `tcgdex-api-core.ts` mapped `rules: raw.description ? [raw.description]
+  : []` and never read `raw.effect` at all (the `RawCard` type didn't
+  even declare it). Since Trainer/Energy cards have no `description`,
+  this meant every Trainer/Energy card's actual rules text was silently
+  dropped on every sync since the TCGdex migration — not a TCGdex data
+  gap, not a new-era rotation issue, a genuine mapping bug on our side
+  from day one of that migration.
+- **Impact is much wider than AI deck generation** — anything reading
+  `card.rules` was affected: `isDrawSupportCard`/`isSearchSupportCard`
+  (deck statistics' draw/search-support counts, shown on every deck's
+  stats dashboard, not just AI-generated ones), AI review's candidate
+  gathering and swap suggestions, and the card detail page's displayed
+  rules text for every Trainer/Energy card. This had been silently wrong
+  for every deck in the app since the TCGdex migration, not something
+  specific to this debugging session.
+- Fixed: added `effect?: string` to the `RawCard` type (documented
+  against the real schema, with the bug explained inline so it can't
+  silently regress), changed the mapping to `rules: raw.effect ?
+  [raw.effect] : []`. Deliberately does NOT fall back to `description`
+  for anything — flavor text isn't rules text, and folding it in would
+  let the draw/search heuristics false-match on Pokédex flavor prose.
+- Added test coverage that didn't exist before this (a real gap — this
+  mapping had zero direct tests, which is exactly how it shipped and
+  went unnoticed): a Trainer card's `effect` maps to `rules` correctly;
+  same for Energy; `description` is never used as a fallback for a
+  Trainer card even if present; a Pokémon card with no `effect` gets an
+  empty `rules` array rather than incorrectly picking up flavor text.
+- **This is a data-mapping fix, not just a code fix** — the 24,548 rows
+  already in the database were synced under the old, broken mapping, so
+  fixing `normalizeCard` alone doesn't retroactively correct what's
+  already stored. A fresh full sync (upserts every card, which is how
+  this sync has always worked — see the local-card-database brief) is
+  required to actually populate the corrected `rules` text into the live
+  database. Triggered immediately after this push, not left for the next
+  scheduled weekly run.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 211 unit tests pass
+  (207 previous + 4 new).

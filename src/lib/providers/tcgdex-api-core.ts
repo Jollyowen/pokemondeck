@@ -50,6 +50,21 @@ type RawCard = {
   suffix?: string;
   trainerType?: string;
   energyType?: string;
+  /**
+   * Card rules/effect text — required by TCGdex's own schema for Trainer
+   * and Energy cards specifically (tcgdex.dev/reference/card). Distinct
+   * from `description`, which is Pokémon-only flavor text (e.g. "It
+   * makes a nest to suit its long and skinny body..."), not rules text
+   * at all. A real bug shipped with the original TCGdex migration: the
+   * normalizer below used to read `description` for `rules` and never
+   * read this field — since Trainer/Energy cards don't have a
+   * `description` at all per the schema, every Trainer/Energy card's
+   * actual rules text was silently dropped, which meant the draw/search-
+   * support text heuristics (and anything else reading `card.rules`)
+   * could never detect a Trainer card's real effect. Confirmed against
+   * TCGdex's own published schema, not assumed, before fixing.
+   */
+  effect?: string;
   abilities?: Array<{ type: string; name: string; effect: string }>;
   attacks?: Array<{
     cost?: string[];
@@ -224,7 +239,13 @@ export function normalizeCard(raw: RawCard): Card {
     // (a plain count) and anything reading retreatCost.length keep working.
     retreatCost: raw.retreat ? Array(raw.retreat).fill("Colorless") : [],
     convertedRetreatCost: raw.retreat ?? 0,
-    rules: raw.description ? [raw.description] : [],
+    // `effect` is the real rules text for Trainer/Energy cards per
+    // TCGdex's schema — see the RawCard.effect doc comment above for the
+    // bug this replaced. `description` (Pokémon-only flavor text) is
+    // deliberately NOT used here; it isn't rules text, and folding it in
+    // would let the draw/search-support heuristics match on flavor
+    // prose rather than real card effects.
+    rules: raw.effect ? [raw.effect] : [],
     rarity: raw.rarity ?? null,
     legalities: {
       standard: mapLegality(raw.legal?.standard),

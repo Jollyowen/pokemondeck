@@ -1986,3 +1986,49 @@ tests). Findings and fixes:
   confirms the cap never touches non-Energy cards.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 196 unit tests pass
   (192 previous + 4 new).
+
+## Fix: candidate pool had no path to off-type "engine" Pokémon (found by hand-simulating the actual prompt)
+
+- Prompted by the user asking why a hand-simulated run of the exact
+  current prompt (done directly in conversation, playing the "compile"
+  model's role) produced a good deck, while the live app still didn't.
+  Tracing through what I'd actually used in that simulation surfaced the
+  real gap: I'd included Bibarel as a draw-engine support Pokémon using
+  general TCG knowledge — but `GENERATION_TASK_INSTRUCTIONS` forbids the
+  real model from proposing anything outside `candidateCards`, and
+  Bibarel (Colorless/Normal) would never have been *in* that pool for a
+  Water/Psychic target like Slowbro, because the only Pokémon-candidate
+  sources were: the target's own printings, its evolution line, and
+  "other Pokémon sharing the target's type." A real model, faithfully
+  following the same instructions, could never have proposed it. My
+  simulation wasn't proof the live pipeline would work — it was a false
+  positive caused by having knowledge the real model's candidate pool
+  didn't actually contain.
+- This is the same category of gap as the Trainer-staples fix a few
+  commits back (9 hardcoded names, too few to reach a 20-42 target with
+  real variety) — except it had never been addressed for Pokémon at all.
+  Real "engine" Pokémon (picked for an ability like a draw or search
+  effect, not for matching the primary attacker's type) are commonly
+  off-type by design, so a type-scoped search structurally can't surface
+  them, no matter how good the prompt wording is.
+- Fixed by adding `STAPLE_UTILITY_POKEMON_NAMES` (currently
+  `Bidoof/Bibarel`, `Manaphy`) — searched by exact name regardless of
+  type, same pattern as the Trainer staple lists, in both
+  `gatherDeckGenerationCandidates` (generation) and `gatherCandidateCards`
+  (AI review, same blind spot, same fix). Each entry pairs a name with
+  its `evolvesFrom` (or `null`) so a two-stage engine's Basic half is
+  gathered too, rather than relying on `ensureEvolutionPrerequisites` to
+  backfill it later.
+- No prompt-text change needed for this one — the model already knows to
+  freely choose from whatever's in `candidateCards` for secondary lines;
+  the fix is purely about the candidate pool actually containing
+  reasonable off-type options in the first place.
+- Deliberately a short, conservative starting list rather than an
+  exhaustive one, same judgment-call caveat as the Trainer lists — worth
+  revisiting if particular engine Pokémon consistently feel missing.
+- No new unit test: `candidate-cards.ts` is `server-only` and does real
+  DB lookups (`searchLocalCards`), same testing-boundary precedent as the
+  rest of this file and `pokemonTcgApiProvider`'s own network calls —
+  only the pure functions around it are directly unit-tested.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 196 unit tests
+  unchanged and passing (no new tests, no existing ones affected).

@@ -29,6 +29,20 @@ const STAPLE_UTILITY_TRAINER_NAMES = [
   "Super Rod",
 ];
 
+// Well-known generic "engine" Pokémon — picked for an ability (draw,
+// search, or similar utility) rather than for sharing the target's type,
+// so the type-scoped search below would never surface them. Each entry
+// is [name, evolvesFrom-or-null] so the Basic half of a two-stage engine
+// (e.g. Bidoof -> Bibarel) gets pulled in alongside the evolved form that
+// actually has the useful ability — a Stage 1 with no Basic in the pool
+// is exactly the kind of thing ensureEvolutionPrerequisites has to paper
+// over later, better to just gather both up front. Same judgment-call
+// caveat as the Trainer staple lists above.
+const STAPLE_UTILITY_POKEMON_NAMES: Array<[name: string, evolvesFrom: string | null]> = [
+  ["Bibarel", "Bidoof"],
+  ["Manaphy", null],
+];
+
 async function findExactNameMatches(
   name: string,
   supertype?: Card["supertype"],
@@ -150,6 +164,18 @@ export async function gatherCandidateCards(
     }
   }
 
+  // 7. Well-known generic engine Pokémon (draw/search/utility abilities),
+  // searched by name regardless of type — see the identical step in
+  // gatherDeckGenerationCandidates below for why the type-scoped search
+  // above can't surface these on its own.
+  for (const [name, evolvesFrom] of STAPLE_UTILITY_POKEMON_NAMES) {
+    if (candidates.size >= MAX_CANDIDATES) break;
+    (await findExactNameMatches(name, "Pokémon")).slice(0, 1).forEach(addIfNew);
+    if (evolvesFrom) {
+      (await findExactNameMatches(evolvesFrom, "Pokémon")).slice(0, 1).forEach(addIfNew);
+    }
+  }
+
   const result = [...candidates.values()];
   return result;
 }
@@ -163,9 +189,11 @@ export type GenerationCandidateResult =
 /**
  * Resolves the named Pokémon and builds a broad, format-filtered candidate
  * pool wide enough to construct a full 60-card deck from scratch — the
- * target's evolution line, other Pokémon sharing its type(s), generic
- * staple Trainers, and matching Basic Energy. Every candidate is a real
- * card from the provider; nothing here is invented.
+ * target's evolution line, other Pokémon sharing its type(s), a small set
+ * of well-known off-type "engine" Pokémon (draw/search abilities that
+ * aren't tied to any particular type), generic staple Trainers, and
+ * matching Basic Energy. Every candidate is a real card from the
+ * provider; nothing here is invented.
  *
  * Returns targetCard: null when the named Pokémon can't be found at all,
  * so the caller can fail with a clear "couldn't find that Pokémon" error
@@ -241,6 +269,21 @@ export async function gatherDeckGenerationCandidates(
       result.cards.filter((c) => c.attacks.length > 0).slice(0, 10).forEach(addIfNew);
     } catch {
       // best-effort
+    }
+  }
+
+  // Well-known generic engine Pokémon (draw/search/utility abilities),
+  // searched by name regardless of type — the type-scoped search above
+  // would never surface these, since their value isn't tied to sharing
+  // the target's type. Without this, the only possible "supporting
+  // Pokémon" the model could ever propose were same-type attackers, which
+  // is a real reported cause of decks with no meaningful support Pokémon
+  // beyond the evolution line for a target with a thin same-type pool.
+  for (const [name, evolvesFrom] of STAPLE_UTILITY_POKEMON_NAMES) {
+    if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
+    (await findExactNameMatches(name, "Pokémon")).slice(0, 2).forEach(addIfNew);
+    if (evolvesFrom) {
+      (await findExactNameMatches(evolvesFrom, "Pokémon")).slice(0, 2).forEach(addIfNew);
     }
   }
 

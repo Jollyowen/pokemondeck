@@ -258,20 +258,23 @@ export async function gatherCandidateCards(
 
   // 6. Other attackers sharing a type already present in the deck — gives
   // the model real alternatives to consider for the deck's main
-  // strategy, not just support cards. pageSize widened from 10 to 40,
-  // same reason as the generation-path equivalent below.
+  // strategy, not just support cards. Widened further (pageSize 40->100,
+  // take 5->10) after confirming via direct query that the generation-
+  // path equivalent was seeing only 15-17 of 466 real legal candidates —
+  // same underlying gap here, just working within review's smaller
+  // 30-candidate total budget rather than generation's 80.
   for (const type of pokemonTypes) {
     if (candidates.size >= MAX_CANDIDATES) break;
     try {
       const result = await searchLocalCards({
         supertype: "Pokémon",
         pokemonType: type,
-        pageSize: 40,
+        pageSize: 100,
       });
       takeLegal(
         result.cards.filter((c) => c.attacks.length > 0),
         format,
-        5,
+        10,
       ).forEach(addIfNew);
     } catch {
       // best-effort, same as above
@@ -411,19 +414,23 @@ export async function gatherDeckGenerationCandidates(
   }
 
   // Other Pokémon sharing a type with the target, as support/backup
-  // attackers. pageSize widened from 20 to 60 and the take-count from 10
-  // to 15 — the original 20-card window, ordered newest-first with no
-  // legality pre-filter, could genuinely be mostly non-attacking support
-  // Pokémon or otherwise-illegal prints before reaching enough legal
-  // attackers, same shape of gap as the Trainer staple searches.
+  // attackers. Confirmed by direct query that this was genuinely
+  // starving the model, not just conservatively small: 466 legal
+  // Psychic attackers actually existed for a real generation request
+  // that only ever saw 15-17 of them. Raised pageSize 60->150 (so the
+  // fetch itself isn't the bottleneck before legality filtering even
+  // runs) and the take-count 15->30 (still well within the 80-candidate
+  // total budget — addIfNew's own per-step size check gracefully caps
+  // the running total regardless, so this can't blow past it even for a
+  // dual-type Pokémon running this loop twice).
   for (const type of targetCard.types) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     try {
-      const result = await searchLocalCards({ supertype: "Pokémon", pokemonType: type, pageSize: 60 });
+      const result = await searchLocalCards({ supertype: "Pokémon", pokemonType: type, pageSize: 150 });
       takeLegal(
         result.cards.filter((c) => c.attacks.length > 0),
         format,
-        15,
+        30,
       ).forEach(addIfNew);
     } catch {
       // best-effort

@@ -2447,3 +2447,37 @@ tests). Findings and fixes:
   non-compliance without another round of hypothesis-and-guess.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 224 unit tests pass
   (214 previous + 10 new).
+
+## Fix: confirmed by direct query — the same-type Pokémon cap was starving the model of real diversity
+
+- User questioned whether "17 Psychic candidates" was a realistic sample
+  or an artificial narrowing. Checked directly rather than reassure
+  without evidence:
+  ```sql
+  select count(*) from cards
+  where supertype = 'Pokémon' and legality_standard = 'legal'
+    and 'Psychic' = any(types) and jsonb_array_length(details->'attacks') > 0;
+  ```
+  Result: **466** legal Psychic attackers actually exist. The generation
+  pipeline's own `takeLegal(..., 15)` cap on the same-type search was
+  throwing away the overwhelming majority of real, legal options before
+  the model ever saw them — a genuine, confirmed artificial constraint,
+  not a reasonable curation of a naturally small pool.
+- Raised both the fetch window and the take-count for the same-type
+  search: generation path pageSize 60→150, take-count 15→30 (well within
+  the 80-candidate total budget; `addIfNew`'s own per-step size check
+  still gracefully caps the running total, so this can't overflow even
+  for a dual-type Pokémon running the loop twice). Applied the same
+  fix proportionally to the review path (pageSize 40→100, take 5→10,
+  scaled down to fit its smaller 30-candidate total budget).
+- Deliberately did NOT raise `GENERATION_MAX_CANDIDATES` (80) itself —
+  that's a deliberate design budget from the approved redesign brief for
+  prompt cost/complexity reasons, not something to casually increase
+  without its own distinct justification; this fix works within the
+  existing budget rather than expanding it.
+- No new test: this is a search-window widening to already-covered
+  gathering functions (server-only, real DB calls — same testing-
+  boundary precedent as every other search-parameter change in this
+  file), not new branching logic.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 224 unit tests
+  unchanged and passing.

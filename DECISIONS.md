@@ -2405,3 +2405,45 @@ tests). Findings and fixes:
   writes a concrete `null` rather than leaving the column absent).
 - Verified: `tsc --noEmit` clean, `eslint` clean, 214 unit tests pass
   (211 previous + 3 new).
+
+## Fix: draw/search text heuristics only matched imperative phrasing, silently missing third-person Pokémon abilities
+
+- Real production log showed the refinement pass producing a
+  **completely unchanged** deck — every single total (Pokémon, Trainer,
+  Energy, draw, search) identical before and after refinement, despite
+  the strengthened "address every listed gap" instructions from the
+  previous fix being live for this attempt. That's a stronger signal
+  than "the model didn't fully comply" — it suggests the model may have
+  had no better option to reach for, i.e. genuine candidate scarcity for
+  the draw-support role specifically, not non-compliance.
+- Checked `text-heuristics.ts` directly rather than guess again: `\bdraw\b`
+  only matches the bare word "draw," never "draws" or "drawing." Same
+  gap for `\bsearch\b` vs. "searches." Trainer card text is almost
+  always imperative ("Draw 2 cards," "Search your deck for..."), but
+  Pokémon abilities and attacks are very often phrased in third person
+  ("This Pokémon draws 2 cards," "...searches your deck for a Basic
+  Energy") — every one of those was silently invisible to
+  `isDrawSupportCard`/`isSearchSupportCard`, understating the real count
+  everywhere they're used: AI candidate classification (both the
+  role-based Trainer search and the deck-quality draw/search hard
+  checks), AND a deck's own stats-dashboard draw/search-support display
+  for every deck in the app, not just AI-generated ones. This module had
+  zero direct unit tests before this fix — the same "shipped with no
+  coverage, went unnoticed" pattern as the earlier TCGdex rules-text bug.
+- Fixed: widened all patterns to accept "s"/"es"/"ing" suffixes
+  (`draws?`, `search(es)?`, `look(s|ing)?`, `reveal(s|ing)?`).
+  `TEXT_HEURISTICS_VERSION` bumped to `1.1.0` per the module's own
+  documented convention (invalidates anything that cached a count
+  computed under the old, narrower patterns).
+- Added a full test file that didn't exist before
+  (`text-heuristics.test.ts`): imperative phrasing, third-person
+  phrasing (the specific regression case), gerund phrasing, singular
+  "draw a card," and a negative case for each function.
+- Also widened diagnostic visibility for next time: `gatherDeckGeneration
+  Candidates` now returns `roleBasedDrawNames`/`roleBasedSearchNames`
+  (the actual card names found by role, not just a count), logged
+  alongside the existing `roleBasedTrainersFound`. A "stuck at exactly N"
+  report can now be traced directly to real candidate scarcity vs. model
+  non-compliance without another round of hypothesis-and-guess.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 224 unit tests pass
+  (214 previous + 10 new).

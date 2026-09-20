@@ -309,6 +309,9 @@ export type CandidateGatheringDiagnostics = {
   totalStaplesSearched: number;
   /** How many draw/search Trainers the role-based (name-agnostic) search found — the resilience fallback for when the hardcoded staple names have rotated out. */
   roleBasedTrainersFound: number;
+  /** The actual card names found by role, not just a count — lets a real "stuck at N draw cards" report be traced directly to candidate scarcity vs. model non-compliance without another round of guessing. */
+  roleBasedDrawNames: string[];
+  roleBasedSearchNames: string[];
 };
 
 /**
@@ -358,6 +361,8 @@ export async function gatherDeckGenerationCandidates(
         staplesFoundButIllegal: [],
         totalStaplesSearched: 0,
         roleBasedTrainersFound: 0,
+        roleBasedDrawNames: [],
+        roleBasedSearchNames: [],
       },
     };
   }
@@ -474,9 +479,13 @@ export async function gatherDeckGenerationCandidates(
   // does rather than by name — see findRoleBasedTrainerCandidates' doc
   // comment for why this exists alongside the name-based staples above.
   let roleBasedTrainersFound = 0;
+  let roleBasedDrawNames: string[] = [];
+  let roleBasedSearchNames: string[] = [];
   if (candidates.size < GENERATION_MAX_CANDIDATES) {
     const roleBased = await findRoleBasedTrainerCandidates(format, 4);
     roleBasedTrainersFound = roleBased.draw.length + roleBased.search.length;
+    roleBasedDrawNames = roleBased.draw.map((c) => c.name);
+    roleBasedSearchNames = roleBased.search.map((c) => c.name);
     roleBased.draw.forEach(addIfNew);
     roleBased.search.forEach(addIfNew);
   }
@@ -523,6 +532,8 @@ export async function gatherDeckGenerationCandidates(
       staplesFoundButIllegal,
       totalStaplesSearched: staplesSearched,
       roleBasedTrainersFound,
+      roleBasedDrawNames,
+      roleBasedSearchNames,
     },
   };
 }

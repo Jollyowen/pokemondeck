@@ -103,6 +103,8 @@ export async function generateDeck(
     staplesFoundButIllegal: diagnostics.staplesFoundButIllegal,
     totalStaplesSearched: diagnostics.totalStaplesSearched,
     roleBasedTrainersFound: diagnostics.roleBasedTrainersFound,
+    roleBasedDrawNames: diagnostics.roleBasedDrawNames,
+    roleBasedSearchNames: diagnostics.roleBasedSearchNames,
   });
 
 

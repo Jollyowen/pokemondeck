@@ -2,7 +2,7 @@ import type { DeckGenerationInput } from "@/types/deck";
 import { getArchetypeProfile } from "@/lib/ai/archetype-profiles";
 
 /** Bump when instructions or expected output shape change meaningfully. */
-export const GENERATION_PROMPT_VERSION = "2.4.0";
+export const GENERATION_PROMPT_VERSION = "2.5.0";
 
 /**
  * Task instructions only — deliberately does NOT describe the output JSON
@@ -29,7 +29,7 @@ Rules:
 - Include a reasonable Basic Pokémon foundation, not just the requested card's later evolutions.
 - A deck with zero Energy cards cannot function. If any Energy candidates are present in "candidateCards", your decklist MUST include a count of Energy cards within "archetypeTargets.energyRange" (or the plan's "targetEnergy" if a plan is present) — not just "some", and not far above or below that range either.
 - Each candidate card includes a "legalInSelectedFormat" field, which will always be true — every candidate you're given is already filtered to be legal in the requested format, so there's nothing to weigh here.
-- If "refinement" is present in the data block: your "cards" output must be the COMPLETE new 60-card decklist, not a diff. Start from "previousCards" and change as few entries as possible to address the listed "feedback" gaps, but every card you are NOT changing must still be re-included in your output with its original count — omitting a card means removing it entirely from the deck, so only omit cards you actually intend to remove. Never include an entry with count 0 to represent a removal; a count must always be a positive integer. Same real-candidates-only rule applies.
+- If "refinement" is present in the data block: your "cards" output must be the COMPLETE new 60-card decklist, not a diff. Start from "previousCards" and change as few entries as possible to address the listed "feedback" gaps, but every card you are NOT changing must still be re-included in your output with its original count — omitting a card means removing it entirely from the deck, so only omit cards you actually intend to remove. Never include an entry with count 0 to represent a removal; a count must always be a positive integer. If the feedback says the Energy count is below the target range and an Energy candidate already appears in "previousCards" (or exists in "candidateCards"), the minimal correct fix is almost always to INCREASE that existing entry's count — Basic Energy has no copy limit, so raising one entry's count by the needed amount is a smaller, more surgical change than adding a new card, and satisfies "change as few cards as possible" better than leaving Energy low or adding an unrelated card. Same real-candidates-only rule applies.
 - Every array-typed field in your output must be an actual array — never a string, never markdown, never XML-like tags.
 - "deckName" should be a short, natural deck name (e.g. "Charizard ex Rush").
 - "explanation" should describe the deck's overall strategy and win condition, explicitly say what role the primary Pokémon plays in it, and briefly explain the purpose of the most important supporting cards or combinations — grounded in the actual cards you chose, in plain language.`;

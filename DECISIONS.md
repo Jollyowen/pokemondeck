@@ -2251,3 +2251,41 @@ tests). Findings and fixes:
   scheduled weekly run.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 211 unit tests pass
   (207 previous + 4 new).
+
+## Fix: widened Pokémon/Energy search windows, added issue-level diagnostic logging, strengthened refinement's Energy guidance
+
+- Follow-up to the rules-text fix: Trainer diversity improved
+  dramatically (5→13 candidates, 8 real role-based matches) as expected,
+  but Pokémon stayed flat at 7 and Energy at 1 candidate, and the actual
+  generated deck still only included 4 Energy despite the 1 available
+  candidate having no copy limit.
+- **Widened every remaining narrow search window**, same shape of fix
+  already proven for Trainer staples (10→25): evolution-line name
+  searches (default pageSize 10 → 25 in both gathering functions),
+  same-type Pokémon search (pageSize 20→60, take-count 10→15 in
+  generation; 10→40/3→5 in review), and matching-type Energy search
+  (pageSize 5→15, take-count 1→2 in both). All follow the same
+  reasoning: a small page ordered newest-first, with no legality
+  pre-filter, can be dominated by illegal prints before reaching a
+  currently-legal one — exactly what was already proven for Trainers.
+- **Added issue-level diagnostic logging.** The quality-check log lines
+  previously only reported a hard-issue *count*, which made it
+  impossible to tell whether a refinement pass fixed the thing it was
+  given feedback about or traded one problem for a different one (a real
+  observed case: post-refinement hard-issue count went UP, from 4 to 5,
+  with no way to see why). Now logs the actual `{code, message}` for
+  every hard issue, plus the deck's Pokémon/Trainer/Energy/draw/search
+  totals, on both the initial and post-refinement checks.
+- **Strengthened the refinement prompt's Energy guidance specifically**:
+  when feedback says Energy is below the target range and an Energy
+  candidate already exists, the minimal correct fix is almost always to
+  *increase that existing entry's count* (Basic Energy has no copy
+  limit) rather than leave it low or add an unrelated card — made this
+  explicit rather than leaving the model to infer it from the general
+  "change as few cards as possible" rule, since the pool clearly had
+  headroom (1 candidate, uncapped quantity) that wasn't being used.
+  `GENERATION_PROMPT_VERSION` bumped to `2.5.0`.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 211 unit tests
+  unchanged and passing (no new tests — these are search-window/logging/
+  prompt-wording changes to already-covered functions, not new logic
+  branches).

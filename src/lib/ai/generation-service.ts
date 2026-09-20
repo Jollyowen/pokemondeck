@@ -159,6 +159,17 @@ export async function generateDeck(
     pokemonName: input.pokemonName,
     passesHardChecks: quality.passesHardChecks,
     hardIssueCount: quality.issues.filter((i) => i.severity === "hard").length,
+    // Full issue detail, not just a count — a count alone can't show
+    // whether a refinement pass actually fixed the thing it was given
+    // feedback about, or traded one problem for a different one.
+    hardIssues: quality.issues.filter((i) => i.severity === "hard").map((i) => ({ code: i.code, message: i.message })),
+    totals: {
+      pokemon: statistics.totalPokemon,
+      trainer: statistics.totalTrainer,
+      energy: statistics.totalEnergy,
+      draw: statistics.drawSupportCount,
+      search: statistics.searchSupportCount,
+    },
   });
 
   // --- Stage 4: one bounded refinement pass if hard checks failed ---
@@ -179,6 +190,16 @@ export async function generateDeck(
       pokemonName: input.pokemonName,
       passesHardChecks: refinedQuality.passesHardChecks,
       hardIssueCount: refinedQuality.issues.filter((i) => i.severity === "hard").length,
+      hardIssues: refinedQuality.issues
+        .filter((i) => i.severity === "hard")
+        .map((i) => ({ code: i.code, message: i.message })),
+      totals: {
+        pokemon: refinedStatistics.totalPokemon,
+        trainer: refinedStatistics.totalTrainer,
+        energy: refinedStatistics.totalEnergy,
+        draw: refinedStatistics.drawSupportCount,
+        search: refinedStatistics.searchSupportCount,
+      },
     });
 
     // Take the refined attempt regardless of whether it fully passes —

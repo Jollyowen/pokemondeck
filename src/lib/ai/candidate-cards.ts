@@ -186,6 +186,9 @@ export async function gatherCandidateCards(
   }
 
   // 1. Evolution-line completions for Pokémon already in the deck.
+  // pageSize widened to 25, same reason as every other widened search in
+  // this file — a small default page can be dominated by illegal older
+  // printings before reaching a currently-legal one.
   const evolutionNames = new Set<string>();
   for (const entry of entries) {
     const card = cardsById[entry.cardId];
@@ -194,7 +197,7 @@ export async function gatherCandidateCards(
   }
   for (const name of evolutionNames) {
     if (candidates.size >= MAX_CANDIDATES) break;
-    const matches = await findExactNameMatches(name, "Pokémon");
+    const matches = await findExactNameMatches(name, "Pokémon", 25);
     takeLegal(matches, format, 2).forEach(addIfNew);
   }
 
@@ -231,7 +234,11 @@ export async function gatherCandidateCards(
     roleBased.search.forEach(addIfNew);
   }
 
-  // 5. Basic Energy matching the Pokémon types already in the deck, if energy count looks low.
+  // 5. Basic Energy matching the Pokémon types already in the deck, if
+  // energy count looks low. pageSize widened from 5 to 15 — a real
+  // reported case found only 1 legal Energy candidate for a type, which
+  // is functionally enough (Basic Energy has no copy limit) but leaves
+  // no fallback if that one candidate is missing for some reason.
   const pokemonTypes = Object.keys(statistics.pokemonTypeDistribution);
   if (statistics.totalEnergy < 10) {
     for (const type of pokemonTypes) {
@@ -240,9 +247,9 @@ export async function gatherCandidateCards(
         const result = await searchLocalCards({
           supertype: "Energy",
           pokemonType: type,
-          pageSize: 5,
+          pageSize: 15,
         });
-        takeLegal(result.cards.filter(isBasicEnergy), format, 1).forEach(addIfNew);
+        takeLegal(result.cards.filter(isBasicEnergy), format, 2).forEach(addIfNew);
       } catch {
         // best-effort, same as above
       }
@@ -251,19 +258,20 @@ export async function gatherCandidateCards(
 
   // 6. Other attackers sharing a type already present in the deck — gives
   // the model real alternatives to consider for the deck's main
-  // strategy, not just support cards.
+  // strategy, not just support cards. pageSize widened from 10 to 40,
+  // same reason as the generation-path equivalent below.
   for (const type of pokemonTypes) {
     if (candidates.size >= MAX_CANDIDATES) break;
     try {
       const result = await searchLocalCards({
         supertype: "Pokémon",
         pokemonType: type,
-        pageSize: 10,
+        pageSize: 40,
       });
       takeLegal(
         result.cards.filter((c) => c.attacks.length > 0),
         format,
-        3,
+        5,
       ).forEach(addIfNew);
     } catch {
       // best-effort, same as above
@@ -386,23 +394,31 @@ export async function gatherDeckGenerationCandidates(
   // release date could otherwise be dominated by illegal promos.
   legalTargetMatches.slice(0, 5).forEach(addIfNew);
 
-  // The target's full evolution line, in both directions.
+  // The target's full evolution line, in both directions. pageSize
+  // widened to 25 for the same reason the staple searches were — a
+  // small default page could be dominated by illegal older printings
+  // before reaching a currently-legal one.
   const evolutionNames = getEvolutionLineNames(targetCard);
   for (const name of evolutionNames) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
-    const matches = await findExactNameMatches(name, "Pokémon");
+    const matches = await findExactNameMatches(name, "Pokémon", 25);
     takeLegal(matches, format, 3).forEach(addIfNew);
   }
 
-  // Other Pokémon sharing a type with the target, as support/backup attackers.
+  // Other Pokémon sharing a type with the target, as support/backup
+  // attackers. pageSize widened from 20 to 60 and the take-count from 10
+  // to 15 — the original 20-card window, ordered newest-first with no
+  // legality pre-filter, could genuinely be mostly non-attacking support
+  // Pokémon or otherwise-illegal prints before reaching enough legal
+  // attackers, same shape of gap as the Trainer staple searches.
   for (const type of targetCard.types) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     try {
-      const result = await searchLocalCards({ supertype: "Pokémon", pokemonType: type, pageSize: 20 });
+      const result = await searchLocalCards({ supertype: "Pokémon", pokemonType: type, pageSize: 60 });
       takeLegal(
         result.cards.filter((c) => c.attacks.length > 0),
         format,
-        10,
+        15,
       ).forEach(addIfNew);
     } catch {
       // best-effort
@@ -465,12 +481,15 @@ export async function gatherDeckGenerationCandidates(
     roleBased.search.forEach(addIfNew);
   }
 
-  // Basic Energy matching the target's type(s).
+  // Basic Energy matching the target's type(s). pageSize widened from 5
+  // to 15 and take-count from 1 to 2 — a real reported case found only 1
+  // legal Energy candidate, functionally enough since Basic Energy has
+  // no copy limit, but leaves no fallback if that one is missing.
   for (const type of targetCard.types) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     try {
-      const result = await searchLocalCards({ supertype: "Energy", pokemonType: type, pageSize: 5 });
-      takeLegal(result.cards.filter(isBasicEnergy), format, 1).forEach(addIfNew);
+      const result = await searchLocalCards({ supertype: "Energy", pokemonType: type, pageSize: 15 });
+      takeLegal(result.cards.filter(isBasicEnergy), format, 2).forEach(addIfNew);
     } catch {
       // best-effort
     }

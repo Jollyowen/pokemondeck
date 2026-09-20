@@ -43,6 +43,34 @@ const STAPLE_UTILITY_POKEMON_NAMES: Array<[name: string, evolvesFrom: string | n
   ["Manaphy", null],
 ];
 
+/**
+ * Normalises quote characters before an exact-name comparison. TCGdex's
+ * own data uses a curly apostrophe (U+2019) in names like "Professor’s
+ * Research" — our hardcoded staple lists use a plain ASCII apostrophe
+ * (U+0027). Left unhandled, that's not just a near-miss in the exact-
+ * match filter below: `searchLocalCards`'s ILIKE is a literal substring
+ * match, so the DB query itself would return zero rows for a name whose
+ * apostrophe doesn't match byte-for-byte, before any filtering even runs.
+ * Exported purely so this is directly unit-testable without exercising
+ * the Supabase-calling search function around it.
+ */
+export function normalizeQuotes(value: string): string {
+  return value.replace(/[\u2018\u2019\u201B]/g, "'");
+}
+
+/**
+ * Builds the actual ILIKE search term: replaces a straight apostrophe
+ * with Postgres's `_` wildcard (matches any single character), so the
+ * query itself matches a name regardless of which apostrophe style the
+ * stored data actually uses. The exact-name filter below still applies
+ * afterward (via normalizeQuotes), so this widening can't accidentally
+ * let through some unrelated card that merely contains a `_`-matchable
+ * substring.
+ */
+export function toIlikeSearchTerm(name: string): string {
+  return name.replace(/'/g, "_");
+}
+
 async function findExactNameMatches(
   name: string,
   supertype?: Card["supertype"],
@@ -50,11 +78,12 @@ async function findExactNameMatches(
 ): Promise<Card[]> {
   try {
     const result = await searchLocalCards({
-      name,
+      name: toIlikeSearchTerm(name),
       supertype,
       pageSize,
     });
-    return result.cards.filter((c) => c.name.toLowerCase() === name.toLowerCase());
+    const target = normalizeQuotes(name).toLowerCase();
+    return result.cards.filter((c) => normalizeQuotes(c.name).toLowerCase() === target);
   } catch {
     return []; // candidate gathering is best-effort; a provider hiccup shouldn't fail the whole review
   }
@@ -186,6 +215,13 @@ export type GenerationCandidateResult =
   | { targetCard: Card; candidates: Card[] }
   | { targetCard: null; candidates: [] };
 
+export type CandidateGatheringDiagnostics = {
+  bySupertype: Record<string, number>;
+  /** Staple names that resolved zero matches at all — the clearest signal of a name-matching or data-population problem, not a legality filter. */
+  staplesMissed: string[];
+  totalStaplesSearched: number;
+};
+
 /**
  * Resolves the named Pokémon and builds a broad, format-filtered candidate
  * pool wide enough to construct a full 60-card deck from scratch — the
@@ -202,7 +238,13 @@ export type GenerationCandidateResult =
 export async function gatherDeckGenerationCandidates(
   pokemonName: string,
   format: DeckFormat,
-): Promise<GenerationCandidateResult & { targetLegalInFormat: boolean; foundButIllegal: boolean }> {
+): Promise<
+  GenerationCandidateResult & {
+    targetLegalInFormat: boolean;
+    foundButIllegal: boolean;
+    diagnostics: CandidateGatheringDiagnostics;
+  }
+> {
   // pageSize is deliberately much higher than the default here: results
   // are ordered alphabetically by set ID, not by recency, so a low limit
   // could genuinely miss the specific (often more recent) printing that's
@@ -221,6 +263,7 @@ export async function gatherDeckGenerationCandidates(
       candidates: [],
       targetLegalInFormat: false,
       foundButIllegal: targetMatches.length > 0,
+      diagnostics: { bySupertype: {}, staplesMissed: [], totalStaplesSearched: 0 },
     };
   }
 
@@ -279,18 +322,28 @@ export async function gatherDeckGenerationCandidates(
   // Pokémon" the model could ever propose were same-type attackers, which
   // is a real reported cause of decks with no meaningful support Pokémon
   // beyond the evolution line for a target with a thin same-type pool.
+  const staplesMissed: string[] = [];
+  let staplesSearched = 0;
   for (const [name, evolvesFrom] of STAPLE_UTILITY_POKEMON_NAMES) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
-    (await findExactNameMatches(name, "Pokémon")).slice(0, 2).forEach(addIfNew);
+    staplesSearched += 1;
+    const matches = await findExactNameMatches(name, "Pokémon");
+    if (matches.length === 0) staplesMissed.push(name);
+    matches.slice(0, 2).forEach(addIfNew);
     if (evolvesFrom) {
-      (await findExactNameMatches(evolvesFrom, "Pokémon")).slice(0, 2).forEach(addIfNew);
+      staplesSearched += 1;
+      const evoMatches = await findExactNameMatches(evolvesFrom, "Pokémon");
+      if (evoMatches.length === 0) staplesMissed.push(evolvesFrom);
+      evoMatches.slice(0, 2).forEach(addIfNew);
     }
   }
 
   // Generic staple Trainers across all roles.
   for (const name of [...STAPLE_DRAW_TRAINER_NAMES, ...STAPLE_SEARCH_TRAINER_NAMES, ...STAPLE_UTILITY_TRAINER_NAMES]) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
+    staplesSearched += 1;
     const matches = await findExactNameMatches(name, "Trainer");
+    if (matches.length === 0) staplesMissed.push(name);
     matches.slice(0, 1).forEach(addIfNew);
   }
 
@@ -310,10 +363,23 @@ export async function gatherDeckGenerationCandidates(
   // came from the local database mirror (searchLocalCards), not a live
   // provider call, so there's nothing stale to write back.
 
+  // Diagnostic breakdown, logged by the caller (generation-service.ts) —
+  // exists specifically to distinguish "the candidate pool is thin
+  // because a name/legality/prompt bug is dropping real matches" from
+  // "the candidate pool is thin because the local database this
+  // environment is reading from genuinely doesn't have much data in it,"
+  // which look identical from the outside (a short candidate list) but
+  // need completely different fixes.
+  const bySupertype: Record<string, number> = {};
+  for (const card of candidateList) {
+    bySupertype[card.supertype] = (bySupertype[card.supertype] ?? 0) + 1;
+  }
+
   return {
     targetCard,
     candidates: candidateList,
     targetLegalInFormat: true,
     foundButIllegal: false,
+    diagnostics: { bySupertype, staplesMissed, totalStaplesSearched: staplesSearched },
   };
 }

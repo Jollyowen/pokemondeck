@@ -2032,3 +2032,55 @@ tests). Findings and fixes:
   only the pure functions around it are directly unit-tested.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 196 unit tests
   unchanged and passing (no new tests, no existing ones affected).
+
+## Fix: apostrophe-mismatch in exact-name candidate search + diagnostic logging to separate "code bug" from "thin database"
+
+- User's next AI-generation explanation reported an explicitly thin
+  candidate pool ("only 9 Pokémon (5 Psychic-typed)... no dedicated draw
+  or search support cards... just 3 generic Trainer candidates") — a
+  different, more fundamental symptom than the earlier "prompt not
+  followed" reports, since this is the model accurately describing what
+  it was actually given, not misusing what it had.
+- **Confirmed real bug**: `findExactNameMatches`'s underlying
+  `searchLocalCards` call uses a literal Postgres `ILIKE` substring
+  match. TCGdex's own data uses a curly apostrophe (`Professor’s
+  Research`, U+2019); our hardcoded staple lists use a plain ASCII one
+  (`'`, U+0027). A byte-mismatch there means the ILIKE query returns
+  **zero rows**, not a near-miss — the exact-match filter downstream
+  never even gets anything to filter. Fixed two ways: `toIlikeSearchTerm`
+  replaces a straight apostrophe with Postgres's `_` wildcard (matches
+  any single character) before the query is sent, so it matches either
+  quote style; `normalizeQuotes` then does the same normalization for the
+  exact-match comparison afterward, so the widened query can't
+  accidentally let through some unrelated card. Both exported and
+  directly unit-tested (`candidate-cards-name-matching.test.ts`), same
+  pattern as `isSafeEnergyTypeWord` in `local-card-repository.ts`.
+- **Named but not fixed here, and flagged explicitly**: this apostrophe
+  issue can only explain 2 of the 15 Trainer staple names ("Professor's
+  Research", "Boss's Orders") — it doesn't account for "only 3 of 15
+  matched" on its own. The much likelier dominant explanation is that the
+  Supabase project this particular environment reads from doesn't
+  actually have the full ~23,735-card sync in it — e.g. a mismatch
+  between `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` as
+  configured in Vercel vs. what the GitHub Actions sync workflow's
+  secrets point at, a risk the local-card-database brief explicitly
+  named ahead of time ("same values as Vercel's, entered separately").
+  This can't be confirmed or fixed from here — I don't have credentials
+  or network access to the live Supabase project from this sandbox, and
+  Supabase isn't on the allowed egress list regardless. Needs the row
+  count in the `cards` table checked directly against the two
+  environments' Supabase URLs.
+- **Added diagnostic logging either way**, since "the pool is thin
+  because of a code bug" and "the pool is thin because the database
+  genuinely has little data" look identical from the outside (a short
+  candidate list) but need completely different fixes.
+  `gatherDeckGenerationCandidates` now returns a `diagnostics` object
+  (`bySupertype` counts, `staplesMissed` — staple names that resolved
+  zero matches at all, `totalStaplesSearched`), logged by
+  `generation-service.ts` alongside the existing candidate-pool-gathered
+  log line. The next generation attempt's Vercel function logs will show
+  directly whether specific staples are being missed (name-matching bug)
+  or whether counts are thin everywhere including well-known non-
+  apostrophe names like "Ultra Ball" (points at the database itself).
+- Verified: `tsc --noEmit` clean, `eslint` clean, 203 unit tests pass
+  (196 previous + 7 new).

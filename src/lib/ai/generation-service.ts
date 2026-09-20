@@ -65,7 +65,7 @@ export async function generateDeck(
     throw new GenerationRateLimitError(env.AI_DECK_GENERATION_LIMIT_PER_DAY);
   }
 
-  const { targetCard, candidates, foundButIllegal } = await gatherDeckGenerationCandidates(
+  const { targetCard, candidates, foundButIllegal, diagnostics } = await gatherDeckGenerationCandidates(
     input.pokemonName,
     input.format,
   );
@@ -83,7 +83,18 @@ export async function generateDeck(
     resolvedTargetName: target.name,
     targetPrintingsInPool: targetPrintingIds.size,
     totalCandidates: candidates.length,
+    // Distinguishes "a bug is dropping real matches" from "this
+    // environment's local card database genuinely has little data in
+    // it" — both look like a thin candidate pool from the outside, but
+    // need completely different fixes. A pool this thin with several
+    // staples missed and low counts everywhere points at the database;
+    // a normal bySupertype spread with an empty staplesMissed pointing
+    // at something more specific to this particular Pokémon/format.
+    candidatesBySupertype: diagnostics.bySupertype,
+    staplesMissed: diagnostics.staplesMissed,
+    totalStaplesSearched: diagnostics.totalStaplesSearched,
   });
+
 
   const candidatesById = Object.fromEntries(candidates.map((c) => [c.id, c]));
   const candidateReviewCards = candidates.map((c) => toDeckReviewCard(c, 0, input.format));

@@ -1741,3 +1741,19 @@ tests). Findings and fixes:
 - Verified: `tsc --noEmit` clean, `eslint` clean (0 warnings), 185 unit
   tests pass (177 previous + 8 new), and a full production build
   succeeds.
+
+## Maintenance: manual sync-cards run to verify pipeline health
+
+- Ran the `Sync card database` workflow manually via `workflow_dispatch`
+  to confirm the weekly cron pipeline is still healthy, rather than
+  waiting for the next scheduled Monday run.
+- Result: 220/220 sets attempted, 23,735 cards synced. One set
+  (`miscp` — Miscellaneous Promos) hit a transient `503` from TCGdex,
+  retried 3 times with the existing backoff, then was skipped per the
+  documented per-set resilience behaviour — the script correctly exited
+  non-zero to flag it for a retry rather than silently swallowing the
+  gap. This is the designed behaviour (see the "sync script hit the
+  API's rate limit" entry above), not a regression.
+- Confirms the retry/skip/idempotent-upsert design introduced for the
+  original pokemontcg.io rate-limit issue continues to work correctly
+  under the current TCGdex provider.

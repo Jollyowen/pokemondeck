@@ -57,12 +57,15 @@ function makeGoodDeck() {
   const energy = makeCard({ id: "energy", name: "Water Energy", supertype: "Energy", subtypes: ["Basic"], types: ["Water"] });
 
   const cardsById = { attacker, draw, search, filler, energy };
+  // Totals exactly 60 (18 Pokémon + 30 Trainer + 12 Energy) and sits
+  // within every "other"-profile range with room to spare, now that
+  // TOTAL_CARD_COUNT_LOW is itself a hard check a "good" deck must pass.
   const entries: DeckCardEntry[] = [
-    { cardId: "attacker", cardName: "Blastoise", quantity: 17 },
-    { cardId: "draw", cardName: "Professor's Research", quantity: 6 },
-    { cardId: "search", cardName: "Ultra Ball", quantity: 6 },
-    { cardId: "filler", cardName: "Filler Item", quantity: 8 },
-    { cardId: "energy", cardName: "Water Energy", quantity: 10 },
+    { cardId: "attacker", cardName: "Blastoise", quantity: 18 },
+    { cardId: "draw", cardName: "Professor's Research", quantity: 8 },
+    { cardId: "search", cardName: "Ultra Ball", quantity: 8 },
+    { cardId: "filler", cardName: "Filler Item", quantity: 14 },
+    { cardId: "energy", cardName: "Water Energy", quantity: 12 },
   ];
   return { entries, cardsById };
 }
@@ -204,6 +207,30 @@ describe("computeDeckQuality — hard checks", () => {
     const statistics = computeDeckStatistics(entries, cardsById, "all");
     const result = computeDeckQuality(entries, cardsById, statistics, "other", "all");
     expect(result.issues.some((i) => i.code === "ENERGY_TYPE_MISMATCH")).toBe(false);
+  });
+
+  it("flags a deck that comes up short of 60 total cards, even if every other check passes", () => {
+    const { entries, cardsById } = makeGoodDeck();
+    // Trim each category down to the bottom edge of its own "other"-
+    // profile range (still individually passing) — this is exactly the
+    // shape a truncated refinement-pass response could produce (e.g.
+    // only the changed cards echoed back), where every category still
+    // looks individually fine but the deck as a whole is incomplete.
+    const shortDeck = entries.map((e) => {
+      if (e.cardId === "attacker") return { ...e, quantity: 15 }; // bottom of pokemonRange [15,20]
+      if (e.cardId === "filler") return { ...e, quantity: 4 }; // brings trainerRange to its floor of 20
+      if (e.cardId === "energy") return { ...e, quantity: 8 }; // bottom of energyRange [8,12]
+      return e;
+    });
+    const statistics = computeDeckStatistics(shortDeck, cardsById, "all");
+    const result = computeDeckQuality(shortDeck, cardsById, statistics, "other", "all");
+    const total = statistics.totalPokemon + statistics.totalTrainer + statistics.totalEnergy;
+    expect(total).toBe(43); // well short of 60
+    expect(result.issues.filter((i) => i.severity === "hard" && i.code !== "TOTAL_CARD_COUNT_LOW")).toHaveLength(0);
+    const issue = result.issues.find((i) => i.code === "TOTAL_CARD_COUNT_LOW");
+    expect(issue).toBeDefined();
+    expect(issue?.severity).toBe("hard");
+    expect(result.passesHardChecks).toBe(false);
   });
 
   it("uses the mill profile's much lower energy/higher trainer thresholds instead of the default profile", () => {

@@ -43,6 +43,29 @@ export function computeDeckQuality(
 
   // --- Hard checks: failing any of these triggers a refinement pass. ---
 
+  // Total card count: buildVerifiedGeneratedDeck never exceeds 60 by
+  // construction, but nothing previously checked whether the model
+  // actually got close to it — a deck that came back well short of 60
+  // (e.g. because a refinement pass echoed back only the cards it
+  // changed) could sail through every other check undetected, since the
+  // Pokémon/Trainer/Energy range checks below only look at each
+  // category's proportion of *whatever total happened to be present*,
+  // not whether that total was itself a complete deck.
+  {
+    const total = statistics.totalPokemon + statistics.totalTrainer + statistics.totalEnergy;
+    const passed = total >= 60;
+    record({
+      code: "TOTAL_CARD_COUNT_LOW",
+      severity: "hard",
+      label: "Total card count",
+      passed,
+      actual: total,
+      target: { min: 60 },
+      message: passed
+        ? `${total} of 60 cards present.`
+        : `Only ${total} of 60 cards present — ${60 - total} short of a complete deck.`,
+    });
+  }
   {
     const passed = inRange(statistics.totalPokemon, profile.pokemonRange);
     record({

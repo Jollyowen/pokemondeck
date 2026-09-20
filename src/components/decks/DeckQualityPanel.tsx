@@ -41,7 +41,9 @@ function CheckChip({ check }: { check: DeckQualityCheck }) {
 /**
  * Collapse-by-default, expand-on-request, per the confirmed UX call in
  * the styling brief — a compact pass/fail summary up front, the full
- * 11-check grid available on demand rather than always shown.
+ * check grid (renders however many `quality.checks` computeDeckQuality
+ * returns — 12 as of TOTAL_CARD_COUNT_LOW being added) available on
+ * demand rather than always shown.
  */
 export function DeckQualityPanel({ quality }: { quality: DeckQualityResult }) {
   const [expanded, setExpanded] = useState(false);

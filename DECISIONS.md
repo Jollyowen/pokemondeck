@@ -1801,3 +1801,66 @@ tests). Findings and fixes:
 - Verified before pushing: `tsc --noEmit` clean, `eslint` clean, all 187
   unit tests pass (185 previous + 2 new, covering the mixed-malformed-
   entries case and the all-entries-malformed case).
+
+## Fix: AI deck generation could badly miss composition targets (e.g. 39 Energy vs. an 8-12 target) and sometimes came up short of 60 cards
+
+- **Root cause, found by tracing the actual prompts sent to the model**:
+  `archetype-profiles.ts`'s numeric thresholds (Pokémon/Trainer/Energy
+  ranges, draw/search minimums) were used *only* by `deck-quality.ts` to
+  grade a deck after the fact — neither the strategy-plan prompt nor the
+  compile prompt ever told the model what those numbers actually were.
+  The model only ever saw a bare archetype label (e.g. `"other"`, or
+  `null`) and had to infer typical composition purely from general
+  Pokémon TCG knowledge, with zero grounding in the exact ranges its
+  output would be scored against. A deck with 39 Energy against an
+  "other"-profile target of 8-12 is consistent with this: the model was
+  never actually shown "8-12" as a number anywhere in the initial prompt.
+- **Fix**: both `buildPlanDataBlock` and `buildGenerationDataBlock` now
+  include an explicit `archetypeTargets` block (`pokemonRange`,
+  `trainerRange`, `energyRange`, `drawSupportMin`, `searchSupportMin`,
+  `basicPokemonMin` — sourced directly from `getArchetypeProfile`, the
+  same function `deck-quality.ts` itself uses to grade the result).
+  `PLAN_TASK_INSTRUCTIONS` and `GENERATION_TASK_INSTRUCTIONS` were
+  rewritten to tell the model these are the *exact* thresholds it will
+  be scored against, not generic guidance, and to require the plan's
+  Pokémon/Trainer/Energy split to both sum to 60 AND fall within
+  `archetypeTargets` simultaneously. `archetypeTargets` is included in
+  the compile-stage data block even when a `plan` is also present, as a
+  concrete cross-check rather than relying solely on the plan having
+  gotten it right. `PLAN_PROMPT_VERSION` bumped to `1.1.0`,
+  `GENERATION_PROMPT_VERSION` to `2.2.0`.
+- **Second, related gap**: nothing previously checked whether a
+  generated deck actually reached 60 total cards — `deck-quality.ts` only
+  checked each category's (Pokémon/Trainer/Energy) *proportion*, never
+  the sum. A deck that came back well short of 60 could pass every hard
+  check undetected, meaning the one bounded refinement pass was never
+  even triggered to try to fix it. Added `TOTAL_CARD_COUNT_LOW` as a new
+  hard check (`total >= 60`) in `computeDeckQuality`, so an incomplete
+  deck now reliably triggers the same refinement-and-flag path every
+  other composition problem does — consistent with the existing "flag,
+  attempt one refinement, never fabricate filler" discipline, not a
+  change to that discipline itself.
+- **Third, related gap — refinement-pass instruction ambiguity**: the
+  previous refinement wording ("adjust `previousCards`... changing as
+  few cards as possible... omit a card to remove it") never explicitly
+  said unchanged cards must still be re-included in the output. Read
+  uncharitably, a model could interpret this as "only output what
+  changed," which — since `buildVerifiedGeneratedDeck` treats `cards` as
+  the complete final decklist, not a diff — would silently drop most of
+  a previously-good 60-card deck down to just a handful of entries. This
+  is a highly plausible mechanism for "doesn't always fill 60 cards,"
+  especially combined with the first gap above (a refinement pass is
+  exactly when the model is reacting to feedback and most likely to
+  reshape its output). Reworded the refinement rule to state explicitly:
+  every card not being changed must still appear in the output with its
+  original count; omission means removal, and only removal.
+- `makeGoodDeck()` in `deck-quality.test.ts` updated to actually total 60
+  (previously totaled 47, which passed every check only because nothing
+  checked the total) so the "passes all hard checks" baseline test stays
+  meaningful now that `TOTAL_CARD_COUNT_LOW` exists. New tests added:
+  one confirming `TOTAL_CARD_COUNT_LOW` fires correctly when every other
+  check individually passes but the total is short, and two covering
+  `archetypeTargets` actually appearing correctly in both prompt data
+  blocks (`generation-archetype-targets.test.ts`).
+- Verified: `tsc --noEmit` clean, `eslint` clean, 191 unit tests pass
+  (187 previous + 4 new).

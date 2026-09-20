@@ -172,6 +172,7 @@ export interface DeckGenerationProvider {
 }
 
 export type DeckQualityIssueCode =
+  | "TOTAL_CARD_COUNT_LOW"
   | "POKEMON_COUNT_OUT_OF_RANGE"
   | "TRAINER_COUNT_OUT_OF_RANGE"
   | "ENERGY_COUNT_OUT_OF_RANGE"

@@ -2289,3 +2289,40 @@ tests). Findings and fixes:
   unchanged and passing (no new tests — these are search-window/logging/
   prompt-wording changes to already-covered functions, not new logic
   branches).
+
+## Fix: compile call truncated mid-JSON — max_tokens too low once candidate pool actually got rich
+
+- Real production failure, right after the candidate-pool widening
+  landed: `AI deck generation: compilation failed` /
+  `AiReviewOutputError` — schema validation failed on the Anthropic
+  tool_use input, with the logged `rawJsonPreview` cutting off mid-word
+  ("...so Slowbro's 'empty hand' b`). That's the signature of hitting
+  `max_tokens` before the model finished writing valid JSON, not a
+  malformed-output problem.
+- **A direct consequence of the last few fixes actually working**: the
+  candidate pool went from 13-21 to 34 candidates (19 Pokémon, 13
+  Trainer), meaning the model had real reason to choose a longer, more
+  diverse decklist; combined with `GENERATION_TASK_INSTRUCTIONS`'s
+  recently-enriched explanation requirement (must now cover the primary
+  Pokémon's role AND the purpose of key supporting cards, not just a
+  brief summary), a full response's token count grew past the existing
+  `max_tokens: 8192` ceiling. Exact same failure shape already
+  documented once for the AI review feature ("Post-Phase-7 fix: model
+  returning strengths as a string" — also a `max_tokens` fix, 4096→8192
+  at the time).
+- Fixed by doubling `max_tokens` for the Anthropic `generateDeck` call:
+  8192 → 16384, giving real headroom for a ~20-30-distinct-card decklist
+  plus a thorough explanation rather than just enough for this one
+  observed case.
+- **Deliberately left the OpenAI adapter's `generateDeck` untouched** —
+  it doesn't set `max_tokens` at all currently (relies on the SDK/API
+  default), which is a pre-existing gap unrelated to this specific bug.
+  Not fixed here to avoid scope creep on a path that isn't actually
+  live (only `ANTHROPIC_API_KEY` is configured in this deployment, per
+  earlier Phase 7 notes) — flagging it explicitly rather than leaving it
+  silently unaddressed, worth a pass if/when an OpenAI key is ever added.
+- No new test: this is a single numeric constant change to a live API
+  call's parameters, not new branching logic — nothing new to unit-test
+  that the existing schema-validation tests don't already cover.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 211 unit tests
+  unchanged and passing.

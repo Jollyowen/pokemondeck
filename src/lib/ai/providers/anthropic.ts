@@ -253,7 +253,18 @@ export const anthropicDeckGenerationProvider: DeckGenerationProvider = {
 
     const response = await client.messages.create({
       model: env.AI_MODEL,
-      max_tokens: 8192,
+      // 8192 -> 16384: real production failure (truncated tool-call JSON,
+      // same "hit max_tokens mid-response, invalid partial JSON" shape as
+      // the AI review's original 4096->8192 fix — see DECISIONS.md). This
+      // time it surfaced only after the candidate pool got substantially
+      // richer (more distinct real candidates -> a longer proposed
+      // decklist) and the explanation requirement got more detailed
+      // (asks for the primary Pokémon's role AND supporting cards'
+      // purposes) — both genuine improvements that pushed a full response
+      // past the old ceiling. 16384 leaves real headroom for a ~20-30
+      // distinct-card decklist plus a thorough explanation, not just
+      // enough for the specific case that failed.
+      max_tokens: 16384,
       system: `${GENERATION_TASK_INSTRUCTIONS}\n\nCall the propose_deck tool exactly once with your completed decklist. "cards" must be an actual JSON array, never a string.`,
       tools: [GENERATE_DECK_TOOL],
       tool_choice: { type: "tool", name: "propose_deck" },

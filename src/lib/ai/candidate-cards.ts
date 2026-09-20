@@ -90,6 +90,28 @@ async function findExactNameMatches(
 }
 
 /**
+ * Filters to legal-in-format cards BEFORE taking the top `n` — real bug,
+ * found by tracing a real report of a near-empty candidate pool despite
+ * every staple search finding a real card by name. Every candidate-
+ * gathering step below used to slice to a small number first and let
+ * `addIfNew`'s legality check reject whatever didn't qualify afterward —
+ * which means if the most-recent printing(s) of a name (results are
+ * ordered newest-first) happen to be a promo or special print without
+ * Standard legality, the whole slice could come back illegal even though
+ * an older, legal reprint of the exact same card exists a few positions
+ * further down the same result list. This is the identical shape of bug
+ * already fixed once for target-Pokémon resolution (see
+ * `legalTargetMatches` below) — it just hadn't been applied to any of
+ * the other gathering steps in either this function or
+ * `gatherDeckGenerationCandidates`. Exported purely so this is directly
+ * unit-testable without exercising the Supabase-calling search functions
+ * around it.
+ */
+export function takeLegal(cards: Card[], format: DeckFormat, n: number): Card[] {
+  return cards.filter((c) => isCardLegalInFormat(c, format)).slice(0, n);
+}
+
+/**
  * Builds a bounded candidate pool: real cards from the provider that are
  * plausibly relevant to this deck's actual composition, capped well below
  * what would make the prompt unwieldy. The model is only ever allowed to
@@ -125,7 +147,7 @@ export async function gatherCandidateCards(
   for (const name of evolutionNames) {
     if (candidates.size >= MAX_CANDIDATES) break;
     const matches = await findExactNameMatches(name, "Pokémon");
-    matches.slice(0, 2).forEach(addIfNew);
+    takeLegal(matches, format, 2).forEach(addIfNew);
   }
 
   // 2. Draw support. Always searched (not just when the deck looks light
@@ -135,21 +157,21 @@ export async function gatherCandidateCards(
   for (const name of STAPLE_DRAW_TRAINER_NAMES) {
     if (candidates.size >= MAX_CANDIDATES) break;
     const matches = await findExactNameMatches(name, "Trainer");
-    matches.slice(0, 1).forEach(addIfNew);
+    takeLegal(matches, format, 1).forEach(addIfNew);
   }
 
   // 3. Search support.
   for (const name of STAPLE_SEARCH_TRAINER_NAMES) {
     if (candidates.size >= MAX_CANDIDATES) break;
     const matches = await findExactNameMatches(name, "Trainer");
-    matches.slice(0, 1).forEach(addIfNew);
+    takeLegal(matches, format, 1).forEach(addIfNew);
   }
 
   // 4. General utility/consistency staples (retreat, recovery, tech).
   for (const name of STAPLE_UTILITY_TRAINER_NAMES) {
     if (candidates.size >= MAX_CANDIDATES) break;
     const matches = await findExactNameMatches(name, "Trainer");
-    matches.slice(0, 1).forEach(addIfNew);
+    takeLegal(matches, format, 1).forEach(addIfNew);
   }
 
   // 5. Basic Energy matching the Pokémon types already in the deck, if energy count looks low.
@@ -163,10 +185,7 @@ export async function gatherCandidateCards(
           pokemonType: type,
           pageSize: 5,
         });
-        result.cards
-          .filter(isBasicEnergy)
-          .slice(0, 1)
-          .forEach(addIfNew);
+        takeLegal(result.cards.filter(isBasicEnergy), format, 1).forEach(addIfNew);
       } catch {
         // best-effort, same as above
       }
@@ -184,10 +203,11 @@ export async function gatherCandidateCards(
         pokemonType: type,
         pageSize: 10,
       });
-      result.cards
-        .filter((c) => c.attacks.length > 0)
-        .slice(0, 3)
-        .forEach(addIfNew);
+      takeLegal(
+        result.cards.filter((c) => c.attacks.length > 0),
+        format,
+        3,
+      ).forEach(addIfNew);
     } catch {
       // best-effort, same as above
     }
@@ -199,9 +219,9 @@ export async function gatherCandidateCards(
   // above can't surface these on its own.
   for (const [name, evolvesFrom] of STAPLE_UTILITY_POKEMON_NAMES) {
     if (candidates.size >= MAX_CANDIDATES) break;
-    (await findExactNameMatches(name, "Pokémon")).slice(0, 1).forEach(addIfNew);
+    takeLegal(await findExactNameMatches(name, "Pokémon"), format, 1).forEach(addIfNew);
     if (evolvesFrom) {
-      (await findExactNameMatches(evolvesFrom, "Pokémon")).slice(0, 1).forEach(addIfNew);
+      takeLegal(await findExactNameMatches(evolvesFrom, "Pokémon"), format, 1).forEach(addIfNew);
     }
   }
 
@@ -293,15 +313,18 @@ export async function gatherDeckGenerationCandidates(
   // ran — a real reported bug (generated decks with no supporting
   // Pokémon at all beyond the evolution line). 5 printings is enough
   // headroom for the model to pick a specific art/set if it has a reason
-  // to, without crowding out everything else.
-  targetMatches.slice(0, 5).forEach(addIfNew);
+  // to, without crowding out everything else. Uses the already-legal-
+  // filtered legalTargetMatches (not the raw targetMatches) for the same
+  // reason takeLegal exists below — the top 5 most-recent printings by
+  // release date could otherwise be dominated by illegal promos.
+  legalTargetMatches.slice(0, 5).forEach(addIfNew);
 
   // The target's full evolution line, in both directions.
   const evolutionNames = getEvolutionLineNames(targetCard);
   for (const name of evolutionNames) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     const matches = await findExactNameMatches(name, "Pokémon");
-    matches.slice(0, 3).forEach(addIfNew);
+    takeLegal(matches, format, 3).forEach(addIfNew);
   }
 
   // Other Pokémon sharing a type with the target, as support/backup attackers.
@@ -309,7 +332,11 @@ export async function gatherDeckGenerationCandidates(
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     try {
       const result = await searchLocalCards({ supertype: "Pokémon", pokemonType: type, pageSize: 20 });
-      result.cards.filter((c) => c.attacks.length > 0).slice(0, 10).forEach(addIfNew);
+      takeLegal(
+        result.cards.filter((c) => c.attacks.length > 0),
+        format,
+        10,
+      ).forEach(addIfNew);
     } catch {
       // best-effort
     }
@@ -329,12 +356,12 @@ export async function gatherDeckGenerationCandidates(
     staplesSearched += 1;
     const matches = await findExactNameMatches(name, "Pokémon");
     if (matches.length === 0) staplesMissed.push(name);
-    matches.slice(0, 2).forEach(addIfNew);
+    takeLegal(matches, format, 2).forEach(addIfNew);
     if (evolvesFrom) {
       staplesSearched += 1;
       const evoMatches = await findExactNameMatches(evolvesFrom, "Pokémon");
       if (evoMatches.length === 0) staplesMissed.push(evolvesFrom);
-      evoMatches.slice(0, 2).forEach(addIfNew);
+      takeLegal(evoMatches, format, 2).forEach(addIfNew);
     }
   }
 
@@ -344,7 +371,7 @@ export async function gatherDeckGenerationCandidates(
     staplesSearched += 1;
     const matches = await findExactNameMatches(name, "Trainer");
     if (matches.length === 0) staplesMissed.push(name);
-    matches.slice(0, 1).forEach(addIfNew);
+    takeLegal(matches, format, 1).forEach(addIfNew);
   }
 
   // Basic Energy matching the target's type(s).
@@ -352,7 +379,7 @@ export async function gatherDeckGenerationCandidates(
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     try {
       const result = await searchLocalCards({ supertype: "Energy", pokemonType: type, pageSize: 5 });
-      result.cards.filter(isBasicEnergy).slice(0, 1).forEach(addIfNew);
+      takeLegal(result.cards.filter(isBasicEnergy), format, 1).forEach(addIfNew);
     } catch {
       // best-effort
     }

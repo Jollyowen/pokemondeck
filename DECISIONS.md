@@ -2084,3 +2084,53 @@ tests). Findings and fixes:
   apostrophe names like "Ultra Ball" (points at the database itself).
 - Verified: `tsc --noEmit` clean, `eslint` clean, 203 unit tests pass
   (196 previous + 7 new).
+
+## Fix: found the actual root cause — slice-before-legality-check in every candidate-gathering step
+
+- Live diagnostic data from the user's Vercel logs finally made this
+  conclusive rather than another guess: `staplesMissed: []` — **every
+  single one of the 18 staple searches found a real card by name** — but
+  `candidatesBySupertype` showed only `{ Pokémon: 5, Trainer: 3, Energy:
+  1 }`, i.e. only 3 of 15 Trainer staples and a fraction of the Pokémon
+  staples actually survived into the pool. "Found by name but didn't
+  survive" can only mean the legality filter, not a name-matching or
+  database-population problem — which ruled out both of the last two
+  rounds of guessing (Supabase env var, database row count) as the
+  actual cause, even though they were reasonable things to check.
+- **Root cause**: every candidate-gathering step in both
+  `gatherDeckGenerationCandidates` and `gatherCandidateCards` sliced its
+  search results down to a small number (`.slice(0, 1)`, `.slice(0, 2)`,
+  `.slice(0, 3)`, `.slice(0, 10)`) *before* `addIfNew` ever checked
+  format legality. `searchLocalCards` orders results newest-first, so if
+  the single most-recent printing of e.g. "Professor's Research" happens
+  to be a promo or special print without Standard legality flagged, the
+  entire slice comes back illegal and gets silently dropped by
+  `addIfNew` — even though an older, legal reprint of the exact same
+  card exists a few positions further down the very same result list
+  that was already fetched. This is the *identical shape* of bug already
+  fixed once, specifically for target-Pokémon resolution (see the
+  "requested Pokémon silently excluded from its own generated deck" fix
+  much earlier in this file) — it was just never applied to any of the
+  other gathering steps that came after it.
+- Fixed by adding `takeLegal(cards, format, n)` — filters to legal-in-
+  format cards *before* taking the top `n`, rather than after — and
+  applying it to every gathering step in both functions: evolution-line
+  completions, same-type Pokémon, off-type engine Pokémon staples,
+  Trainer staples, and type-matched Basic Energy. The target's own
+  printings step now uses the already-legal-filtered
+  `legalTargetMatches` (computed a few lines earlier for target
+  resolution) instead of the raw, unfiltered `targetMatches`, for the
+  same reason.
+- This also retroactively explains why the earlier fixes (widened
+  Trainer staple list, off-type engine Pokémon, apostrophe normalization)
+  didn't actually resolve the user's report even though they were all
+  genuine, correctly-implemented improvements: none of them addressed
+  the fact that whatever *did* get found was still being thrown away by
+  this ordering bug before it could ever reach the candidate pool.
+- New tests in `candidate-cards-name-matching.test.ts`: `takeLegal`
+  correctly skips an illegal card even when it sorts first and finds a
+  legal one further down the same list (the exact reported scenario);
+  returns empty when nothing is legal; respects the requested cap;
+  treats everything as legal when format is `"all"`.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 207 unit tests pass
+  (203 previous + 4 new).

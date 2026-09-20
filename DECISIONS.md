@@ -2549,3 +2549,40 @@ tests). Findings and fixes:
   parameter addition in this file.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 224 unit tests
   unchanged and passing.
+
+## Diagnostic: raw vs. verified card count, to distinguish under-generation from silent verification drops
+
+- Real production case: candidate pool is now genuinely rich (78 total,
+  34 Pokémon, 36 Trainer, 8 Energy) and every composition ratio check
+  passed — the only remaining hard issue was `TOTAL_CARD_COUNT_LOW` (52,
+  then 54 of 60). The model's own explanation claimed "the 16/24/10
+  split sums to exactly 60," directly contradicting the verified deck's
+  actual count — a real discrepancy worth explaining before guessing at
+  a fix, since it has two very different possible causes: the model's
+  raw output was genuinely short despite its own claim, or the raw
+  output really did total 60 and `buildVerifiedGeneratedDeck` silently
+  dropped some entries (most likely a hallucinated/invalid cardId — the
+  explanation named a specific ID, "Deoxys (me04-034)," that may or may
+  not have actually been in `candidateCards`).
+- Added logging to distinguish these before assuming either one:
+  `rawEntryCount`/`rawCardCount` (summed straight from the model's own
+  `raw.cards`, before any verification) vs. `verifiedCardCount` (after
+  `buildVerifiedGeneratedDeck`), plus `droppedCardIds` — any cardId the
+  model referenced that isn't actually in `candidatesById`, a real,
+  checkable hallucination rather than an inference. Logged for both the
+  initial compile and the refinement pass
+  (`AI deck generation: raw vs verified card count` /
+  `AI deck generation: refinement raw vs verified card count`).
+- Deliberately did NOT implement a deterministic "top up existing
+  choices to reach 60" fix yet, even though composition ratios landing
+  perfectly while only the total falls short would make that technically
+  easy — that would reverse an existing, deliberate, already-approved
+  design decision ("Explicit design decision: never pad a short result
+  up to 60... never silently topped up with generic energy or anything
+  else the model didn't actually choose," from the original AI deck
+  generation addition). Reversing an approved design decision needs an
+  explicit decision, not a unilateral fix during a debugging session —
+  flagged for the user to decide once the raw-vs-verified diagnostic
+  shows which of the two actual causes this is.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 224 unit tests
+  unchanged and passing (pure logging addition, no new branching logic).

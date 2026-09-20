@@ -154,6 +154,28 @@ export async function generateDeck(
   let raw = await compile();
   let verifiedCards = verify(raw);
 
+  // Distinguishes two very different failure shapes that look identical
+  // from the final totals alone: the model's raw output already being
+  // short of 60, vs. the model genuinely proposing 60 but
+  // buildVerifiedGeneratedDeck silently dropping some entries (a
+  // hallucinated/invalid cardId, an invalid count). A real report had
+  // the model's own explanation claim "sums to exactly 60" while the
+  // verified deck landed at 52 — this is what would have told us
+  // immediately which of those two it actually was, instead of guessing.
+  const rawCardCount = raw.cards.reduce((sum, c) => sum + (Number.isFinite(c.count) ? Math.floor(c.count) : 0), 0);
+  const verifiedCardCount = verifiedCards.reduce((sum, e) => sum + e.quantity, 0);
+  const droppedCardIds = raw.cards.filter((c) => !candidatesById[c.cardId]).map((c) => c.cardId);
+  console.log("AI deck generation: raw vs verified card count", {
+    pokemonName: input.pokemonName,
+    rawEntryCount: raw.cards.length,
+    rawCardCount,
+    verifiedCardCount,
+    // Non-empty here means the model referenced a cardId that isn't
+    // actually in candidateCards — a real, checkable hallucination, not
+    // a rate-limiting or under-generation issue.
+    droppedCardIds,
+  });
+
   // --- Stage 3: deterministic quality scoring ---
   let statistics = computeDeckStatistics(verifiedCards, candidatesById, input.format);
   let quality = computeDeckQuality(verifiedCards, candidatesById, statistics, input.strategyArchetype, input.format);
@@ -180,6 +202,21 @@ export async function generateDeck(
     const feedback = quality.issues.filter((i) => i.severity === "hard").map((i) => i.message);
     const refinedRaw = await compile({ previousCards: raw.cards, feedback });
     const refinedVerified = verify(refinedRaw);
+
+    const refinedRawCardCount = refinedRaw.cards.reduce(
+      (sum, c) => sum + (Number.isFinite(c.count) ? Math.floor(c.count) : 0),
+      0,
+    );
+    const refinedVerifiedCardCount = refinedVerified.reduce((sum, e) => sum + e.quantity, 0);
+    const refinedDroppedCardIds = refinedRaw.cards.filter((c) => !candidatesById[c.cardId]).map((c) => c.cardId);
+    console.log("AI deck generation: refinement raw vs verified card count", {
+      pokemonName: input.pokemonName,
+      rawEntryCount: refinedRaw.cards.length,
+      rawCardCount: refinedRawCardCount,
+      verifiedCardCount: refinedVerifiedCardCount,
+      droppedCardIds: refinedDroppedCardIds,
+    });
+
     const refinedStatistics = computeDeckStatistics(refinedVerified, candidatesById, input.format);
     const refinedQuality = computeDeckQuality(
       refinedVerified,

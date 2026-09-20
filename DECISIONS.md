@@ -2481,3 +2481,37 @@ tests). Findings and fixes:
   file), not new branching logic.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 224 unit tests
   unchanged and passing.
+
+## Fix: Trainer candidates had the same undersampling gap as Pokémon, plus no broad fallback at all
+
+- Same evidence-based check as the Pokémon fix, applied to Trainers on
+  request: `select count(*) from cards where supertype='Trainer' and
+  legality_standard='legal'` → **448** legal Trainers actually exist.
+  The pipeline's structural ceiling before this fix was 15 (named
+  staples, 1 each) + 8 (role-based draw/search, 4 each) = 23 max
+  possible distinct candidates, with real staple successes landing
+  around 13 — a similar order-of-magnitude undersampling as the
+  15-of-466 Pokémon gap.
+- **Worse than the Pokémon case in one respect**: Pokémon had a broad
+  same-type fallback search (now widened); Trainers had *no broad
+  fallback at all* — draw/search classification and 15 old-era names
+  were the only paths in. Any real Trainer that wasn't draw-support,
+  search-support, or one of those 15 specific names — Tools, Stadiums,
+  disruption cards, additional search/draw variants beyond the first
+  few found — was structurally invisible regardless of how large the
+  real legal pool was.
+- Fixed by extending `findRoleBasedTrainerCandidates` with a third,
+  genuine catch-all bucket (`other`): every legal Trainer that doesn't
+  classify as draw or search still gets picked up, up to a separate cap,
+  from the same widened fetch (pageSize 100→300). Generation path:
+  `perRole` 4→8, new `otherCount` 15 (max ~31 from this one step,
+  proportionate to the 80-candidate budget). Review path: `perRole` 3→5,
+  `otherCount` 6 (scaled down to fit its smaller 30-candidate budget).
+- Extended diagnostics to match: `roleBasedOtherNames` alongside the
+  existing draw/search name lists, so the actual breadth of what's being
+  surfaced is directly visible in the generation log, not just a total
+  count.
+- No new test: same testing-boundary precedent as every other search-
+  window change in this file (server-only, real DB calls).
+- Verified: `tsc --noEmit` clean, `eslint` clean, 224 unit tests
+  unchanged and passing.

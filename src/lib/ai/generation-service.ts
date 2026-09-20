@@ -105,6 +105,7 @@ export async function generateDeck(
     roleBasedTrainersFound: diagnostics.roleBasedTrainersFound,
     roleBasedDrawNames: diagnostics.roleBasedDrawNames,
     roleBasedSearchNames: diagnostics.roleBasedSearchNames,
+    roleBasedOtherNames: diagnostics.roleBasedOtherNames,
   });
 
 

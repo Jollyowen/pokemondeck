@@ -139,23 +139,35 @@ export function takeLegal(cards: Card[], format: DeckFormat, n: number): Card[] 
 async function findRoleBasedTrainerCandidates(
   format: DeckFormat,
   perRole: number,
-): Promise<{ draw: Card[]; search: Card[] }> {
+  otherCount: number,
+): Promise<{ draw: Card[]; search: Card[]; other: Card[] }> {
   try {
-    // Ordered newest-first with no name/type filter — pageSize wide
-    // enough that, after filtering to whatever's actually legal right
-    // now, there's a real sample to classify from.
-    const result = await searchLocalCards({ supertype: "Trainer", pageSize: 100 });
-    const legal = takeLegal(result.cards, format, 100);
+    // pageSize widened 100->300 after confirming via direct query that
+    // 448 legal Trainer cards actually exist in the current format —
+    // same undersampling shape already found and fixed for Pokémon.
+    // "other" is new: draw/search are real, useful roles to classify by
+    // text, but the vast majority of real Trainers are neither (Tools,
+    // Stadiums, disruption, alternate search/draw variants beyond the
+    // first `perRole` found) — without a genuine catch-all, anything
+    // that wasn't one of the 15 named staples or in the first `perRole`
+    // draw/search matches was structurally invisible to the model, no
+    // matter how large the real legal pool actually was.
+    const result = await searchLocalCards({ supertype: "Trainer", pageSize: 300 });
+    const legal = takeLegal(result.cards, format, 300);
     const draw: Card[] = [];
     const search: Card[] = [];
+    const other: Card[] = [];
     for (const card of legal) {
-      if (draw.length < perRole && isDrawSupportCard(card)) draw.push(card);
-      if (search.length < perRole && isSearchSupportCard(card)) search.push(card);
-      if (draw.length >= perRole && search.length >= perRole) break;
+      const isDraw = draw.length < perRole && isDrawSupportCard(card);
+      const isSearch = search.length < perRole && isSearchSupportCard(card);
+      if (isDraw) draw.push(card);
+      if (isSearch) search.push(card);
+      if (!isDraw && !isSearch && other.length < otherCount) other.push(card);
+      if (draw.length >= perRole && search.length >= perRole && other.length >= otherCount) break;
     }
-    return { draw, search };
+    return { draw, search, other };
   } catch {
-    return { draw: [], search: [] }; // best-effort, same discipline as every other search in this file
+    return { draw: [], search: [], other: [] }; // best-effort, same discipline as every other search in this file
   }
 }
 
@@ -226,12 +238,16 @@ export async function gatherCandidateCards(
   }
 
   // 4b. Role-based draw/search support, found by what a card's text
-  // actually does rather than by name — see findRoleBasedTrainerCandidates'
-  // doc comment for why this exists alongside the name-based staples above.
+  // actually does rather than by name, plus a broad "other" catch-all —
+  // see findRoleBasedTrainerCandidates' doc comment for why the
+  // catch-all exists alongside draw/search classification and the
+  // name-based staples above. perRole/otherCount scaled down from the
+  // generation path's to fit review's smaller 30-candidate budget.
   if (candidates.size < MAX_CANDIDATES) {
-    const roleBased = await findRoleBasedTrainerCandidates(format, 3);
+    const roleBased = await findRoleBasedTrainerCandidates(format, 5, 6);
     roleBased.draw.forEach(addIfNew);
     roleBased.search.forEach(addIfNew);
+    roleBased.other.forEach(addIfNew);
   }
 
   // 5. Basic Energy matching the Pokémon types already in the deck, if
@@ -315,6 +331,7 @@ export type CandidateGatheringDiagnostics = {
   /** The actual card names found by role, not just a count — lets a real "stuck at N draw cards" report be traced directly to candidate scarcity vs. model non-compliance without another round of guessing. */
   roleBasedDrawNames: string[];
   roleBasedSearchNames: string[];
+  roleBasedOtherNames: string[];
 };
 
 /**
@@ -366,6 +383,7 @@ export async function gatherDeckGenerationCandidates(
         roleBasedTrainersFound: 0,
         roleBasedDrawNames: [],
         roleBasedSearchNames: [],
+        roleBasedOtherNames: [],
       },
     };
   }
@@ -483,18 +501,27 @@ export async function gatherDeckGenerationCandidates(
   }
 
   // Role-based draw/search support, found by what a card's text actually
-  // does rather than by name — see findRoleBasedTrainerCandidates' doc
-  // comment for why this exists alongside the name-based staples above.
+  // does rather than by name, plus a broad "other" catch-all for every
+  // other real Trainer role (Tools, Stadiums, disruption, additional
+  // search/draw variants beyond the first few) — see
+  // findRoleBasedTrainerCandidates' doc comment for why the catch-all
+  // exists alongside draw/search classification and the name-based
+  // staples above; confirmed by direct query that 448 legal Trainers
+  // actually exist, only a small fraction of which were ever previously
+  // reachable through draw/search classification or the 15 staple names.
   let roleBasedTrainersFound = 0;
   let roleBasedDrawNames: string[] = [];
   let roleBasedSearchNames: string[] = [];
+  let roleBasedOtherNames: string[] = [];
   if (candidates.size < GENERATION_MAX_CANDIDATES) {
-    const roleBased = await findRoleBasedTrainerCandidates(format, 4);
-    roleBasedTrainersFound = roleBased.draw.length + roleBased.search.length;
+    const roleBased = await findRoleBasedTrainerCandidates(format, 8, 15);
+    roleBasedTrainersFound = roleBased.draw.length + roleBased.search.length + roleBased.other.length;
     roleBasedDrawNames = roleBased.draw.map((c) => c.name);
     roleBasedSearchNames = roleBased.search.map((c) => c.name);
+    roleBasedOtherNames = roleBased.other.map((c) => c.name);
     roleBased.draw.forEach(addIfNew);
     roleBased.search.forEach(addIfNew);
+    roleBased.other.forEach(addIfNew);
   }
 
   // Basic Energy matching the target's type(s). pageSize widened from 5
@@ -541,6 +568,7 @@ export async function gatherDeckGenerationCandidates(
       roleBasedTrainersFound,
       roleBasedDrawNames,
       roleBasedSearchNames,
+      roleBasedOtherNames,
     },
   };
 }

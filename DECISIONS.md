@@ -1864,3 +1864,60 @@ tests). Findings and fixes:
   blocks (`generation-archetype-targets.test.ts`).
 - Verified: `tsc --noEmit` clean, `eslint` clean, 191 unit tests pass
   (187 previous + 4 new).
+
+## Addition: qualitative battle-style guidance + strategic tie-breaking order, per user-supplied deck-building rules doc
+
+- User shared a house "Pokémon TCG Deck-Building Rules" reference doc.
+  Cross-checked it against the app first rather than applying it
+  wholesale:
+  - Its general Pokémon/Trainer/Energy ranges (15-20 / 20-30 / 8-12)
+    already exactly match the existing `"other"` archetype profile — no
+    change needed there.
+  - Format is already a required field both in `generateDeckSchema` and
+    the generator form's UI (defaults to "standard", always sent) — the
+    doc's "ask the user for a format" requirement is already satisfied
+    structurally, no conversational ask step added.
+  - The doc's copy-limit section said **3** copies max; confirmed with
+    the user this should stay **4** (the real Pokémon TCG rule, and what
+    `DEFAULT_COPY_LIMIT` in both `validate.ts` and `verify-generation.ts`
+    already enforces) — treated as a typo in the doc, not implemented.
+  - Kept `"other"` as the fourth archetype (the doc only describes three
+    battle styles) per explicit confirmation — `"other"` continues to use
+    the generic default profile, no forced choice among the three.
+- **What was genuinely new and got added**: the model was previously only
+  ever shown a bare archetype label (`"aggro"`, `"mill"`, etc., or
+  `null`) with no explanation of what that style actually means for card
+  selection — same gap as the earlier "39 Energy" fix, just on the
+  qualitative side instead of the numeric side. Added
+  `strategyDescription` to each `ArchetypeProfile` in
+  `archetype-profiles.ts` (paraphrased from the doc's per-style priority
+  lists), surfaced via the same `archetypeTargets` block already used for
+  the numeric ranges (both `plan-prompt.ts` and `generation-prompt.ts`).
+- Added an explicit strategic tie-breaking order to
+  `GENERATION_TASK_INSTRUCTIONS` for when two candidates compete for the
+  same slot: support-for-primary-Pokémon > consistency > battle-style
+  alignment > resource efficiency > flexibility/utility > raw power.
+  Deliberately dropped the doc's top two priorities (format legality,
+  copy-limit compliance) from this list — both are already guaranteed
+  *structurally* by `gatherDeckGenerationCandidates`'s legality filter and
+  `buildVerifiedGeneratedDeck`'s copy-limit enforcement, so they aren't
+  really tie-breakers the model needs to reason about; the prompt now
+  says this explicitly so the model doesn't waste effort double-guessing
+  something already deterministically enforced.
+- Added explicit "a supporting Pokémon can be essential to the deck's
+  engine without becoming a second primary focus" guidance to the compile
+  prompt, and both prompts now frame `pokemonName` as the deck's single
+  primary focus that every other card's inclusion should be justifiable
+  against.
+- Enriched the `"explanation"` output requirement to explicitly ask for
+  the primary Pokémon's role and the purpose of the most important
+  supporting cards/combinations, not just a general strategy summary —
+  matches the doc's final-presentation section.
+- `PLAN_PROMPT_VERSION` bumped to `1.2.0`, `GENERATION_PROMPT_VERSION` to
+  `2.3.0`.
+- Tests updated/added in `generation-archetype-targets.test.ts`:
+  `strategyDescription` now part of the expected `archetypeTargets`
+  shape; new tests confirm the "other" fallback description text and
+  that all four archetypes get distinct descriptions.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 192 unit tests pass
+  (191 previous + 1 new).

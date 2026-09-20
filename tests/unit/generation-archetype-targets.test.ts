@@ -32,6 +32,7 @@ describe("buildPlanDataBlock — archetypeTargets grounding", () => {
       drawSupportMin: profile.drawSupportMin,
       searchSupportMin: profile.searchSupportMin,
       basicPokemonMin: profile.basicPokemonMin,
+      strategyDescription: profile.strategyDescription,
     });
   });
 
@@ -46,6 +47,14 @@ describe("buildPlanDataBlock — archetypeTargets grounding", () => {
     const data = JSON.parse(buildPlanDataBlock(input));
     expect(data.archetypeTargets.energyRange).toEqual(getArchetypeProfile("other").energyRange);
     expect(data.archetypeTargets.energyRange).toEqual([8, 12]);
+    expect(data.archetypeTargets.strategyDescription).toContain("No specific battle style");
+  });
+
+  it("gives each archetype a distinct strategyDescription", () => {
+    const descriptions = new Set(
+      (["aggro", "control", "mill", "other"] as const).map((a) => getArchetypeProfile(a).strategyDescription),
+    );
+    expect(descriptions.size).toBe(4);
   });
 });
 

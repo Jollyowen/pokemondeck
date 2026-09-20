@@ -1921,3 +1921,68 @@ tests). Findings and fixes:
   that all four archetypes get distinct descriptions.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 192 unit tests pass
   (191 previous + 1 new).
+
+## Fix: real generation report — no supporting Pokémon, 36 Energy, only 8 Trainer cards
+
+- User reported real generated decks with three problems at once: no
+  Pokémon beyond the primary evolution line, 36 Energy against an 8-12
+  target, and only 8 Trainer cards. Traced each to a distinct root cause
+  rather than treating it as one vague "the prompt doesn't work" issue —
+  the previous grounding fix (archetypeTargets, strategyDescription) was
+  necessary but not sufficient, since none of it addresses what the
+  candidate pool actually contains or guarantees compliance deterministically.
+- **Root cause 1 — candidate pool crowded out by redundant printings.**
+  `gatherDeckGenerationCandidates` added the target Pokémon's printings
+  with `targetMatches.forEach(addIfNew)` — unlike every other step in the
+  same function (all sliced to 2-3/10/1), this one added *every* legal
+  printing found, up to the 100 fetched. A Pokémon with many reprints
+  could consume a large share of the 80-candidate budget before "other
+  Pokémon sharing a type" ever ran. Fixed: `targetMatches.slice(0, 5)`.
+- **Root cause 2 — Trainer candidates capped at 9 hardcoded staple
+  names.** Draw/search/utility staple lists totaled 9 real cards, each
+  max 4 copies (36 total ceiling) with very little variety — genuinely
+  hard to reach a 20-42 Trainer target with real choice from that few
+  options. Widened to 4 draw (`+ Judge, Cynthia`), 5 search (`+ Level
+  Ball, Great Ball`), 6 utility (`+ Escape Rope, Super Rod`) — 15 staples
+  total, 60-copy ceiling. Shared by both `gatherCandidateCards` (AI
+  review) and `gatherDeckGenerationCandidates` (generation), since both
+  read from the same constants — review's swap-suggestion variety
+  benefits too, not just generation.
+- **Root cause 3 — nothing deterministically capped Energy.** The prompt
+  asks the model to stay within `archetypeTargets.energyRange`, and the
+  one bounded refinement pass nudges it if it doesn't — but neither is a
+  guarantee, and Basic Energy is exempt from the per-name copy limit, so
+  a single Energy candidate could be assigned an arbitrarily large count
+  (36, in the reported case) and pass straight through construction
+  untouched. This is exactly the kind of thing this app's own stated
+  discipline says shouldn't be left to the model — "verification is
+  enforcement by construction, not filtering after the fact" (see the
+  redesign brief's `buildVerifiedGeneratedDeck` note). Added a
+  `maxEnergyCount` option to `buildVerifiedGeneratedDeck`: once the
+  running Energy total reaches it, further Energy is truncated the same
+  way the 60-card cap already truncates overshoot. `generation-service.ts`
+  now passes `getArchetypeProfile(strategyArchetype).energyRange[1]` in on
+  every `verify()` call (both the initial and refinement compile passes).
+  Deliberately only a ceiling, not a floor — a deck genuinely short on
+  Energy still gets flagged by the existing hard checks rather than this
+  function inventing copies the model didn't choose, consistent with the
+  "never pad" rule already documented for this function.
+- **Prompt fix — plan's named secondary lines were never actually
+  referenced in the compile step.** `GENERATION_TASK_INSTRUCTIONS` told
+  the model to follow the plan's numeric Pokémon/Trainer/Energy counts,
+  but never told it to actually use the plan's `attackerLine`/
+  `secondaryLines` (the specific Pokémon names the plan intended beyond
+  the primary evolution line) when compiling the actual card list —
+  plausible mechanism for "only the evolution line, no other Pokémon"
+  independent of root cause 1. Added an explicit instruction: for every
+  name in `attackerLine`/`secondaryLines` that also appears among
+  `candidateCards`, include real printings of it; don't build a deck
+  containing only the primary line while ignoring the plan's named
+  secondary lines. `GENERATION_PROMPT_VERSION` bumped to `2.4.0`.
+- New tests in `verify-generation.test.ts` (`maxEnergyCount option`
+  describe block): caps a single Energy candidate's count; caps the SUM
+  across multiple Energy candidates, not each independently; confirms no
+  cap applies when the option is omitted (existing behaviour preserved);
+  confirms the cap never touches non-Energy cards.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 196 unit tests pass
+  (192 previous + 4 new).

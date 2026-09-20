@@ -3,6 +3,7 @@ import { getServerEnv } from "@/lib/env";
 import type { DeckFormat } from "@/types/card";
 import type { Deck, DeckGenerationResult, StrategyArchetype } from "@/types/deck";
 import { gatherDeckGenerationCandidates } from "@/lib/ai/candidate-cards";
+import { getArchetypeProfile } from "@/lib/ai/archetype-profiles";
 import { toDeckReviewCard } from "@/lib/deck/review-cards";
 import { buildCandidatePoolSummary } from "@/lib/ai/candidate-pool-summary";
 import { getDeckGenerationProvider } from "@/lib/ai/provider-factory";
@@ -119,7 +120,11 @@ export async function generateDeck(
   }
 
   function verify(raw: DeckGenerationResult): DeckCardEntry[] {
-    return ensureEvolutionPrerequisites(buildVerifiedGeneratedDeck(raw.cards, candidatesById), candidatesById);
+    const maxEnergyCount = getArchetypeProfile(input.strategyArchetype).energyRange[1];
+    return ensureEvolutionPrerequisites(
+      buildVerifiedGeneratedDeck(raw.cards, candidatesById, { maxEnergyCount }),
+      candidatesById,
+    );
   }
 
   let raw = await compile();

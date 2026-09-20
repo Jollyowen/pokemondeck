@@ -13,10 +13,21 @@ const MAX_CANDIDATES = 30;
 // targeted search, never added to a deck or shown to the model as
 // anything other than one of several candidates it may or may not use.
 // This list is a judgment call, not an exhaustive or "correct" set —
-// revisit if particular staples consistently feel missing.
-const STAPLE_DRAW_TRAINER_NAMES = ["Professor's Research", "Iono"];
-const STAPLE_SEARCH_TRAINER_NAMES = ["Ultra Ball", "Nest Ball", "Quick Ball"];
-const STAPLE_UTILITY_TRAINER_NAMES = ["Switch", "Ordinary Rod", "Rare Candy", "Boss's Orders"];
+// widened from an original 9 names after real generation reports came
+// back with too little Trainer variety to comfortably reach a 20-42
+// Trainer target (only 9 possible distinct cards, capped at 4 copies
+// each, meant hitting even the low end of that range left little room
+// for the model to actually choose between options).
+const STAPLE_DRAW_TRAINER_NAMES = ["Professor's Research", "Iono", "Judge", "Cynthia"];
+const STAPLE_SEARCH_TRAINER_NAMES = ["Ultra Ball", "Nest Ball", "Quick Ball", "Level Ball", "Great Ball"];
+const STAPLE_UTILITY_TRAINER_NAMES = [
+  "Switch",
+  "Ordinary Rod",
+  "Rare Candy",
+  "Boss's Orders",
+  "Escape Rope",
+  "Super Rod",
+];
 
 async function findExactNameMatches(
   name: string,
@@ -202,8 +213,17 @@ export async function gatherDeckGenerationCandidates(
     candidates.set(card.id, card);
   }
 
-  // The target itself, and every printing found for it.
-  targetMatches.forEach(addIfNew);
+  // The target itself, and its printings — capped, not every printing
+  // found. Every other step here is sliced to a small number; this one
+  // previously wasn't (targetMatches.forEach with no slice), and a
+  // popular Pokémon can have dozens of reprints. Left unsliced, that
+  // could consume most of the 80-candidate budget on redundant printings
+  // of the SAME card before "other Pokémon sharing a type" below ever
+  // ran — a real reported bug (generated decks with no supporting
+  // Pokémon at all beyond the evolution line). 5 printings is enough
+  // headroom for the model to pick a specific art/set if it has a reason
+  // to, without crowding out everything else.
+  targetMatches.slice(0, 5).forEach(addIfNew);
 
   // The target's full evolution line, in both directions.
   const evolutionNames = getEvolutionLineNames(targetCard);

@@ -29,14 +29,30 @@ export type RawGeneratedCard = { cardId: string; count: number };
  * - Never pads a short result up to 60 with anything the model didn't
  *   actually choose — a deck under 60 stays under 60, verified as a
  *   draft, rather than silently topped up with invented filler.
+ * - Total Energy count is deterministically capped at `maxEnergyCount`
+ *   when provided (the archetype's energyRange upper bound). Basic
+ *   Energy is exempt from the per-name copy limit above, so nothing else
+ *   stops a single Energy candidate from being assigned an arbitrarily
+ *   large count — a real reported bug produced a 36-Energy deck against
+ *   an 8-12 target. The prompt asks the model to stay in range, and the
+ *   one bounded refinement pass nudges it if it doesn't, but neither is
+ *   a guarantee; this makes the upper bound a hard, structural one, the
+ *   same way copy limits and the 60-card cap already are. Deliberately
+ *   NOT enforcing a floor the same way — a deck genuinely short on
+ *   Energy stays short and gets flagged (TOTAL_CARD_COUNT_LOW / hard
+ *   quality checks), rather than this function inventing extra copies
+ *   the model didn't choose, which would break the "never pad" rule
+ *   above.
  */
 export function buildVerifiedGeneratedDeck(
   rawCards: RawGeneratedCard[],
   candidatesById: Record<string, Card>,
+  options?: { maxEnergyCount?: number },
 ): DeckCardEntry[] {
   const nameGroupTotals = new Map<string, number>();
   const result: DeckCardEntry[] = [];
   let totalCount = 0;
+  let energyCount = 0;
 
   for (const item of rawCards) {
     if (totalCount >= DECK_SIZE) break;
@@ -60,6 +76,14 @@ export function buildVerifiedGeneratedDeck(
       nameGroupTotals.set(key, alreadyUsed + count);
     }
 
+    // Cap total Energy at the archetype's upper bound, when supplied —
+    // Basic Energy has no per-name limit above, so this is the only
+    // thing standing between the model and an arbitrarily lopsided deck.
+    if (card.supertype === "Energy" && options?.maxEnergyCount !== undefined) {
+      const energyAllowed = Math.max(0, options.maxEnergyCount - energyCount);
+      count = Math.min(count, energyAllowed);
+    }
+
     if (count <= 0) continue;
 
     // Same card ID appearing more than once in the model's own output
@@ -72,6 +96,7 @@ export function buildVerifiedGeneratedDeck(
     }
 
     totalCount += count;
+    if (card.supertype === "Energy") energyCount += count;
   }
 
   return result;

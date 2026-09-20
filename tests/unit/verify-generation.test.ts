@@ -153,6 +153,52 @@ describe("buildVerifiedGeneratedDeck", () => {
     const result = buildVerifiedGeneratedDeck([{ cardId: "ace", count: 3 }], candidates);
     expect(result).toEqual([{ cardId: "ace", cardName: "Computer Search", quantity: 1 }]);
   });
+
+  describe("maxEnergyCount option", () => {
+    it("caps a single Energy candidate's count at the supplied maximum", () => {
+      const candidates = { e: makeCard({ id: "e", name: "Water Energy", supertype: "Energy", subtypes: ["Basic"] }) };
+      // Real reported bug: nothing previously stopped a model from
+      // assigning an arbitrarily large count to one Basic Energy
+      // candidate (copy-limit exempt), e.g. 36 against an 8-12 target.
+      const result = buildVerifiedGeneratedDeck([{ cardId: "e", count: 36 }], candidates, { maxEnergyCount: 12 });
+      expect(result).toEqual([{ cardId: "e", cardName: "Water Energy", quantity: 12 }]);
+    });
+
+    it("caps the SUM of multiple Energy candidates, not each independently", () => {
+      const candidates = {
+        water: makeCard({ id: "water", name: "Water Energy", supertype: "Energy", subtypes: ["Basic"] }),
+        fire: makeCard({ id: "fire", name: "Fire Energy", supertype: "Energy", subtypes: ["Basic"] }),
+      };
+      const result = buildVerifiedGeneratedDeck(
+        [
+          { cardId: "water", count: 10 },
+          { cardId: "fire", count: 10 },
+        ],
+        candidates,
+        { maxEnergyCount: 12 },
+      );
+      const totalEnergy = result.reduce((sum, e) => sum + e.quantity, 0);
+      expect(totalEnergy).toBe(12);
+      expect(result).toEqual([
+        { cardId: "water", cardName: "Water Energy", quantity: 10 },
+        { cardId: "fire", cardName: "Fire Energy", quantity: 2 },
+      ]);
+    });
+
+    it("does not cap Energy at all when no maxEnergyCount is supplied", () => {
+      const candidates = { e: makeCard({ id: "e", name: "Water Energy", supertype: "Energy", subtypes: ["Basic"] }) };
+      const result = buildVerifiedGeneratedDeck([{ cardId: "e", count: 36 }], candidates);
+      expect(result).toEqual([{ cardId: "e", cardName: "Water Energy", quantity: 36 }]);
+    });
+
+    it("never affects non-Energy cards", () => {
+      const candidates = { p: makeCard({ id: "p", name: "Blastoise", supertype: "Pokémon", subtypes: ["Basic"] }) };
+      // Would be capped to 4 by the ordinary copy limit regardless, but
+      // confirms maxEnergyCount isn't accidentally applied to Pokémon.
+      const result = buildVerifiedGeneratedDeck([{ cardId: "p", count: 4 }], candidates, { maxEnergyCount: 2 });
+      expect(result).toEqual([{ cardId: "p", cardName: "Blastoise", quantity: 4 }]);
+    });
+  });
 });
 
 describe("ensureEvolutionPrerequisites", () => {

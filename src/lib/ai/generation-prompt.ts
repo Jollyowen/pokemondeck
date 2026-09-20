@@ -2,7 +2,7 @@ import type { DeckGenerationInput } from "@/types/deck";
 import { getArchetypeProfile } from "@/lib/ai/archetype-profiles";
 
 /** Bump when instructions or expected output shape change meaningfully. */
-export const GENERATION_PROMPT_VERSION = "2.3.0";
+export const GENERATION_PROMPT_VERSION = "2.4.0";
 
 /**
  * Task instructions only — deliberately does NOT describe the output JSON
@@ -23,7 +23,7 @@ When two otherwise-viable candidates are competing for the same slot, break the 
 
 Rules:
 - Every card in your proposed decklist MUST reference a "cardId" that appears in "candidateCards". Never invent a card ID or use one from memory that wasn't supplied.
-- If a "plan" is present in the data block, follow its target Pokémon/Trainer/Energy counts and Trainer role targets closely — it was already checked against the candidate pool, don't improvise a different shape. If no "plan" is present, use "archetypeTargets" in the data block directly instead — these are the EXACT numeric ranges/minimums your decklist will be scored against, not just typical suggestions, so don't rely on generic deck-building knowledge for these numbers.
+- If a "plan" is present in the data block, follow its target Pokémon/Trainer/Energy counts and Trainer role targets closely — it was already checked against the candidate pool, don't improvise a different shape. The plan's "attackerLine" and "secondaryLines" name specific real Pokémon (by name) it intends the deck to include beyond just the requested Pokémon's own evolution line — for every name listed there that also appears among "candidateCards", include actual printings of it. Do not build a deck containing only the primary evolution line while ignoring the plan's named secondary lines; the Pokémon-count target in the plan assumes those secondary Pokémon are actually present. If no "plan" is present, use "archetypeTargets" in the data block directly instead — these are the EXACT numeric ranges/minimums your decklist will be scored against, not just typical suggestions, so don't rely on generic deck-building knowledge for these numbers.
 - Your output "cards" array total (summing every card's count) MUST be exactly 60 whenever the candidate pool can support it — treat 60 as a hard target, not an aspiration. Only fall short of 60 if the supplied candidates genuinely cannot fill it (e.g. too few distinct cards after copy limits are applied); if that happens, say so explicitly in your explanation. Never invent cards beyond the supplied candidates to reach 60.
 - Respect the standard 4-copy-per-name limit; Basic Energy is exempt and can appear in any quantity.
 - Include a reasonable Basic Pokémon foundation, not just the requested card's later evolutions.

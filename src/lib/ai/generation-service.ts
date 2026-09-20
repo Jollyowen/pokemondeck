@@ -4,6 +4,7 @@ import type { DeckFormat } from "@/types/card";
 import type { Deck, DeckGenerationResult, StrategyArchetype } from "@/types/deck";
 import { gatherDeckGenerationCandidates } from "@/lib/ai/candidate-cards";
 import { getArchetypeProfile } from "@/lib/ai/archetype-profiles";
+import { getEvolutionLineNames } from "@/lib/deck/evolution-line";
 import { toDeckReviewCard } from "@/lib/deck/review-cards";
 import { buildCandidatePoolSummary } from "@/lib/ai/candidate-pool-summary";
 import { getDeckGenerationProvider } from "@/lib/ai/provider-factory";
@@ -83,6 +84,13 @@ export async function generateDeck(
     resolvedTargetName: target.name,
     targetPrintingsInPool: targetPrintingIds.size,
     totalCandidates: candidates.length,
+    // targetTypes empty would silently zero out two whole gathering
+    // steps (same-type Pokémon, matching Basic Energy) with no error at
+    // all — worth seeing directly rather than inferring it from a low
+    // total. evolutionLineNames similarly confirms whether the evolution-
+    // line step even had anything to search for in the first place.
+    targetTypes: target.types,
+    evolutionLineNames: getEvolutionLineNames(target),
     // Distinguishes "a bug is dropping real matches" from "this
     // environment's local card database genuinely has little data in
     // it" — both look like a thin candidate pool from the outside, but

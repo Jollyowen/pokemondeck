@@ -239,6 +239,8 @@ export type CandidateGatheringDiagnostics = {
   bySupertype: Record<string, number>;
   /** Staple names that resolved zero matches at all — the clearest signal of a name-matching or data-population problem, not a legality filter. */
   staplesMissed: string[];
+  /** Staple names that WERE found by name but had zero legal-in-format printings among the fetched results — points at legality data/rotation, not a matching bug. */
+  staplesFoundButIllegal: string[];
   totalStaplesSearched: number;
 };
 
@@ -283,7 +285,7 @@ export async function gatherDeckGenerationCandidates(
       candidates: [],
       targetLegalInFormat: false,
       foundButIllegal: targetMatches.length > 0,
-      diagnostics: { bySupertype: {}, staplesMissed: [], totalStaplesSearched: 0 },
+      diagnostics: { bySupertype: {}, staplesMissed: [], staplesFoundButIllegal: [], totalStaplesSearched: 0 },
     };
   }
 
@@ -350,18 +352,29 @@ export async function gatherDeckGenerationCandidates(
   // is a real reported cause of decks with no meaningful support Pokémon
   // beyond the evolution line for a target with a thin same-type pool.
   const staplesMissed: string[] = [];
+  const staplesFoundButIllegal: string[] = [];
   let staplesSearched = 0;
+  // pageSize widened from the default 10 to 25 here specifically: a
+  // well-reprinted staple can easily have 10+ printings that sort ahead
+  // of its actual currently-legal one (recent special/promo/illustration
+  // prints in particular), so 10 wasn't always enough headroom for
+  // takeLegal to find a legal match at all, even with legality now
+  // checked before slicing rather than after.
   for (const [name, evolvesFrom] of STAPLE_UTILITY_POKEMON_NAMES) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     staplesSearched += 1;
-    const matches = await findExactNameMatches(name, "Pokémon");
+    const matches = await findExactNameMatches(name, "Pokémon", 25);
     if (matches.length === 0) staplesMissed.push(name);
-    takeLegal(matches, format, 2).forEach(addIfNew);
+    const legal = takeLegal(matches, format, 2);
+    if (matches.length > 0 && legal.length === 0) staplesFoundButIllegal.push(name);
+    legal.forEach(addIfNew);
     if (evolvesFrom) {
       staplesSearched += 1;
-      const evoMatches = await findExactNameMatches(evolvesFrom, "Pokémon");
+      const evoMatches = await findExactNameMatches(evolvesFrom, "Pokémon", 25);
       if (evoMatches.length === 0) staplesMissed.push(evolvesFrom);
-      takeLegal(evoMatches, format, 2).forEach(addIfNew);
+      const evoLegal = takeLegal(evoMatches, format, 2);
+      if (evoMatches.length > 0 && evoLegal.length === 0) staplesFoundButIllegal.push(evolvesFrom);
+      evoLegal.forEach(addIfNew);
     }
   }
 
@@ -369,9 +382,11 @@ export async function gatherDeckGenerationCandidates(
   for (const name of [...STAPLE_DRAW_TRAINER_NAMES, ...STAPLE_SEARCH_TRAINER_NAMES, ...STAPLE_UTILITY_TRAINER_NAMES]) {
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     staplesSearched += 1;
-    const matches = await findExactNameMatches(name, "Trainer");
+    const matches = await findExactNameMatches(name, "Trainer", 25);
     if (matches.length === 0) staplesMissed.push(name);
-    takeLegal(matches, format, 1).forEach(addIfNew);
+    const legal = takeLegal(matches, format, 1);
+    if (matches.length > 0 && legal.length === 0) staplesFoundButIllegal.push(name);
+    legal.forEach(addIfNew);
   }
 
   // Basic Energy matching the target's type(s).
@@ -407,6 +422,6 @@ export async function gatherDeckGenerationCandidates(
     candidates: candidateList,
     targetLegalInFormat: true,
     foundButIllegal: false,
-    diagnostics: { bySupertype, staplesMissed, totalStaplesSearched: staplesSearched },
+    diagnostics: { bySupertype, staplesMissed, staplesFoundButIllegal, totalStaplesSearched: staplesSearched },
   };
 }

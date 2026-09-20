@@ -100,6 +100,7 @@ export async function generateDeck(
     // at something more specific to this particular Pokémon/format.
     candidatesBySupertype: diagnostics.bySupertype,
     staplesMissed: diagnostics.staplesMissed,
+    staplesFoundButIllegal: diagnostics.staplesFoundButIllegal,
     totalStaplesSearched: diagnostics.totalStaplesSearched,
   });
 

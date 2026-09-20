@@ -2515,3 +2515,37 @@ tests). Findings and fixes:
   window change in this file (server-only, real DB calls).
 - Verified: `tsc --noEmit` clean, `eslint` clean, 224 unit tests
   unchanged and passing.
+
+## Addition: Special Energy candidates
+
+- Follow-up to the Basic Energy candidate check — confirmed 317 legal
+  Energy cards exist overall, but that count wasn't directly actionable
+  since it spans all types and Energy diversity doesn't constrain a
+  deck the way Pokémon/Trainer diversity does (Basic Energy has no copy
+  limit, so one legal candidate is functionally enough). What the check
+  did surface: the Energy search only ever looked for `isBasicEnergy`
+  cards — Special Energy (acceleration, dual-type, utility-effect Energy
+  cards) was never searched for at all, a real strategic category
+  missing entirely rather than an undersampling of one that already
+  existed.
+- Added a dedicated Special Energy step to both
+  `gatherDeckGenerationCandidates` and `gatherCandidateCards`:
+  `supertype: "Energy"` with no `pokemonType` filter (deliberately
+  broad — many Special Energy cards aren't tied to a specific elemental
+  type the way Basic Energy is, so a type-scoped search would miss them
+  even when relevant), filtered to `!isBasicEnergy(card)`. Generation:
+  pageSize 60, take 6. Review: pageSize 60, take 4 (scaled to its
+  smaller budget). Not gated on "energy count looks low" the way the
+  Basic Energy step is — Special Energy is a strategic choice
+  independent of raw Energy count.
+- No changes needed to copy-limit or Energy-cap enforcement: Special
+  Energy already correctly goes through the normal 4-copy limit in
+  `buildVerifiedGeneratedDeck` (only exempted for `isBasicEnergy` cards,
+  which Special Energy isn't), and the `maxEnergyCount` cap already
+  applies to every Energy-supertype card regardless of Basic/Special —
+  both were already correct, this just makes Special Energy reachable
+  as a candidate at all.
+- No new test: same testing-boundary precedent as every other search-
+  parameter addition in this file.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 224 unit tests
+  unchanged and passing.

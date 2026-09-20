@@ -272,6 +272,27 @@ export async function gatherCandidateCards(
     }
   }
 
+  // 5b. Special Energy — a real, strategically meaningful card category
+  // that the type-scoped Basic Energy search above structurally can't
+  // surface: many Special Energy cards (acceleration, dual-type,
+  // utility effects) aren't tied to a specific elemental type the way
+  // Basic Energy is, so a pokemonType-filtered search would miss them
+  // even when they're exactly the kind of thing a deck could use. Not
+  // gated on "energy count looks low" the way Basic Energy is above —
+  // Special Energy is a strategic choice independent of raw count.
+  if (candidates.size < MAX_CANDIDATES) {
+    try {
+      const result = await searchLocalCards({ supertype: "Energy", pageSize: 60 });
+      takeLegal(
+        result.cards.filter((c) => !isBasicEnergy(c)),
+        format,
+        4,
+      ).forEach(addIfNew);
+    } catch {
+      // best-effort, same as above
+    }
+  }
+
   // 6. Other attackers sharing a type already present in the deck — gives
   // the model real alternatives to consider for the deck's main
   // strategy, not just support cards. Widened further (pageSize 40->100,
@@ -533,6 +554,24 @@ export async function gatherDeckGenerationCandidates(
     try {
       const result = await searchLocalCards({ supertype: "Energy", pokemonType: type, pageSize: 15 });
       takeLegal(result.cards.filter(isBasicEnergy), format, 2).forEach(addIfNew);
+    } catch {
+      // best-effort
+    }
+  }
+
+  // Special Energy — same reasoning as the review-path equivalent: a
+  // real, strategically meaningful category that a type-scoped search
+  // structurally can't surface, since many Special Energy cards
+  // (acceleration, dual-type, utility) aren't tied to a specific
+  // elemental type the way Basic Energy is.
+  if (candidates.size < GENERATION_MAX_CANDIDATES) {
+    try {
+      const result = await searchLocalCards({ supertype: "Energy", pageSize: 60 });
+      takeLegal(
+        result.cards.filter((c) => !isBasicEnergy(c)),
+        format,
+        6,
+      ).forEach(addIfNew);
     } catch {
       // best-effort
     }

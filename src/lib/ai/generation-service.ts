@@ -144,9 +144,13 @@ export async function generateDeck(
   }
 
   function verify(raw: DeckGenerationResult): DeckCardEntry[] {
-    const maxEnergyCount = getArchetypeProfile(input.strategyArchetype).energyRange[1];
+    const profile = getArchetypeProfile(input.strategyArchetype);
     return ensureEvolutionPrerequisites(
-      buildVerifiedGeneratedDeck(raw.cards, candidatesById, { maxEnergyCount }),
+      buildVerifiedGeneratedDeck(raw.cards, candidatesById, {
+        maxEnergyCount: profile.energyRange[1],
+        maxPokemonCount: profile.pokemonRange[1],
+        maxTrainerCount: profile.trainerRange[1],
+      }),
       candidatesById,
     );
   }

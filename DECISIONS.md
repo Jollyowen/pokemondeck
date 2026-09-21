@@ -2778,3 +2778,50 @@ tests). Findings and fixes:
   card count.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 237 unit tests pass
   (232 previous + 5 new).
+
+## Fix: generalized the Energy-only ceiling cap to Pokémon and Trainer too
+
+- Real production report: a generated deck landed at exactly 60/60
+  cards (the top-up/60-card fix is working correctly) but badly
+  miscomposed — 16 Pokémon / 38 Trainer / 6 Energy against a control
+  archetype's 10-15 / 25-32 / 10-14 targets, and barely improved after
+  refinement (16/36/8). The raw diagnostic showed why: `rawCardCount:
+  138` — the model's raw output totaled more than double the 60-card
+  target. `buildVerifiedGeneratedDeck` processes entries in whatever
+  order the model listed them and simply stops once the running total
+  hits 60 — a healthy design for a *modest* overshoot, but with a raw
+  total this far over, the final composition becomes arbitrary rather
+  than proportional: whichever categories the model happened to list
+  first dominate the truncated result, regardless of what balance it
+  may have actually intended.
+- **Generalized the existing Energy-only ceiling cap** (added a few
+  fixes ago for the "36 Energy vs 8-12 target" bug) to all three
+  categories. `buildVerifiedGeneratedDeck`'s options grew from
+  `{ maxEnergyCount }` to `{ maxEnergyCount, maxPokemonCount,
+  maxTrainerCount }`, each sourced from the archetype's own range upper
+  bound the same way Energy's already was. `generation-service.ts`'s
+  `verify()` now passes all three. This makes an upper-bound composition
+  violation for ANY category structurally impossible during
+  construction, regardless of how badly the model overshoots the total
+  or in what order it lists entries — not just Energy anymore, matching
+  the same "enforcement by construction, not filtering after the fact"
+  discipline already applied to copy limits, the 60-card cap, and
+  (previously) Energy alone.
+- Deliberately still NOT enforcing a floor for any category — a deck
+  genuinely short on Pokémon or Trainer after this function stays short
+  here, exactly as Energy already did; the existing hard quality checks
+  (`POKEMON_COUNT_OUT_OF_RANGE` etc.) and the one bounded refinement pass
+  remain the mechanism for pushing a category up toward its minimum,
+  since inventing extra copies to hit a floor would violate the same
+  "never fabricate content the model didn't choose" principle
+  `topUpExistingCardsToSixty` was careful to respect.
+- New tests in `verify-generation.test.ts` (renamed/expanded describe
+  block): Pokémon total capped across multiple candidates; Trainer
+  capped the same way; a direct reproduction of the reported scenario
+  (Pokémon and Trainer entries listed before Energy, each requested well
+  above what any sane deck would run, matching the real 138-card
+  overshoot shape) confirming all three ceilings hold regardless of
+  list order or overshoot severity; confirms no cap applies when the
+  options are omitted (existing behavior preserved).
+- Verified: `tsc --noEmit` clean, `eslint` clean, 241 unit tests pass
+  (237 previous + 4 new).

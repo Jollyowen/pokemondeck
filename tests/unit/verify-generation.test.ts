@@ -199,6 +199,110 @@ describe("buildVerifiedGeneratedDeck", () => {
       expect(result).toEqual([{ cardId: "p", cardName: "Blastoise", quantity: 4 }]);
     });
   });
+
+  describe("maxPokemonCount / maxTrainerCount options", () => {
+    it("caps total Pokémon across multiple candidates at the supplied maximum", () => {
+      const candidates = {
+        a: makeCard({ id: "a", name: "Slowpoke", supertype: "Pokémon", subtypes: ["Basic"] }),
+        b: makeCard({ id: "b", name: "Deoxys", supertype: "Pokémon", subtypes: ["Basic"] }),
+        c: makeCard({ id: "c", name: "Marshadow", supertype: "Pokémon", subtypes: ["Basic"] }),
+        d: makeCard({ id: "d", name: "Jynx", supertype: "Pokémon", subtypes: ["Basic"] }),
+      };
+      const result = buildVerifiedGeneratedDeck(
+        [
+          { cardId: "a", count: 4 },
+          { cardId: "b", count: 4 },
+          { cardId: "c", count: 4 },
+          { cardId: "d", count: 4 },
+        ],
+        candidates,
+        { maxPokemonCount: 15 },
+      );
+      const totalPokemon = result.reduce((sum, e) => sum + e.quantity, 0);
+      expect(totalPokemon).toBe(15);
+    });
+
+    it("caps total Trainer count the same way", () => {
+      const candidates = {
+        a: makeCard({ id: "a", name: "Boss's Orders", supertype: "Trainer" }),
+        b: makeCard({ id: "b", name: "Switch", supertype: "Trainer" }),
+        c: makeCard({ id: "c", name: "Judge", supertype: "Trainer" }),
+        d: makeCard({ id: "d", name: "Rare Candy", supertype: "Trainer" }),
+        e: makeCard({ id: "e", name: "Ultra Ball", supertype: "Trainer" }),
+        f: makeCard({ id: "f", name: "Energy Search", supertype: "Trainer" }),
+        g: makeCard({ id: "g", name: "Gwynn", supertype: "Trainer" }),
+        h: makeCard({ id: "h", name: "Emma", supertype: "Trainer" }),
+      };
+      const raw = Object.keys(candidates).map((cardId) => ({ cardId, count: 4 })); // 8 * 4 = 32 raw
+      const result = buildVerifiedGeneratedDeck(raw, candidates, { maxTrainerCount: 25 });
+      const totalTrainer = result.reduce((sum, e) => sum + e.quantity, 0);
+      expect(totalTrainer).toBe(25);
+    });
+
+    it("makes an upper-bound composition violation structurally impossible even with a severe raw overshoot", () => {
+      // Real reported case: the model's raw output totaled 138 cards
+      // against a 60-card target for a control archetype (Pokémon
+      // 10-15, Trainer 25-32, Energy 10-14). Because entries are
+      // processed in list order and truncated once the 60-card total is
+      // hit, a severe overshoot like this made the final composition
+      // arbitrary rather than proportional — whichever categories were
+      // listed first dominated. This test reproduces that shape
+      // (Pokémon and Trainer entries listed before Energy) and confirms
+      // the category caps hold regardless.
+      const candidates = {
+        p1: makeCard({ id: "p1", name: "Slowpoke", supertype: "Pokémon", subtypes: ["Basic"] }),
+        p2: makeCard({ id: "p2", name: "Deoxys", supertype: "Pokémon", subtypes: ["Basic"] }),
+        p3: makeCard({ id: "p3", name: "Marshadow", supertype: "Pokémon", subtypes: ["Basic"] }),
+        p4: makeCard({ id: "p4", name: "Jynx", supertype: "Pokémon", subtypes: ["Basic"] }),
+        t1: makeCard({ id: "t1", name: "Boss's Orders", supertype: "Trainer" }),
+        t2: makeCard({ id: "t2", name: "Switch", supertype: "Trainer" }),
+        t3: makeCard({ id: "t3", name: "Judge", supertype: "Trainer" }),
+        t4: makeCard({ id: "t4", name: "Rare Candy", supertype: "Trainer" }),
+        t5: makeCard({ id: "t5", name: "Ultra Ball", supertype: "Trainer" }),
+        t6: makeCard({ id: "t6", name: "Energy Search", supertype: "Trainer" }),
+        t7: makeCard({ id: "t7", name: "Gwynn", supertype: "Trainer" }),
+        t8: makeCard({ id: "t8", name: "Emma", supertype: "Trainer" }),
+        t9: makeCard({ id: "t9", name: "Poké Ball", supertype: "Trainer" }),
+        t10: makeCard({ id: "t10", name: "Prism Tower", supertype: "Trainer" }),
+        e1: makeCard({ id: "e1", name: "Psychic Energy", supertype: "Energy", subtypes: ["Basic"] }),
+      };
+      // Pokémon and Trainer entries listed first, each wildly over-
+      // requested (raw total 4*4 + 10*4 + 6 = 62, but every individual
+      // count is also inflated relative to what any sane deck would run,
+      // matching the "raw output far exceeds 60" real report).
+      const raw = [
+        ...["p1", "p2", "p3", "p4"].map((cardId) => ({ cardId, count: 4 })), // 16 Pokémon requested
+        ...["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10"].map((cardId) => ({ cardId, count: 4 })), // 40 Trainer requested
+        { cardId: "e1", count: 6 }, // listed last, would be starved by naive in-order truncation
+      ];
+      const result = buildVerifiedGeneratedDeck(raw, candidates, {
+        maxPokemonCount: 15,
+        maxTrainerCount: 32,
+        maxEnergyCount: 14,
+      });
+      const byCategory = { Pokémon: 0, Trainer: 0, Energy: 0 };
+      for (const entry of result) {
+        const card = candidates[entry.cardId as keyof typeof candidates];
+        byCategory[card.supertype] += entry.quantity;
+      }
+      expect(byCategory.Pokémon).toBeLessThanOrEqual(15);
+      expect(byCategory.Trainer).toBeLessThanOrEqual(32);
+      // Energy still isn't padded up to its floor by this function (see
+      // the "never pads" note above) — it's still whatever the model
+      // actually proposed, capped only at the ceiling. The point of this
+      // test is the two ceilings above, not the Energy floor, which
+      // topUpExistingCardsToSixty handles separately.
+      expect(byCategory.Energy).toBeLessThanOrEqual(14);
+    });
+
+    it("does not cap Pokémon or Trainer at all when the options aren't supplied", () => {
+      const candidates = { p: makeCard({ id: "p", name: "Slowpoke", supertype: "Pokémon", subtypes: ["Basic"] }) };
+      // Copy limit (4) still applies regardless — this just confirms no
+      // category ceiling kicks in on top of it when unconfigured.
+      const result = buildVerifiedGeneratedDeck([{ cardId: "p", count: 4 }], candidates);
+      expect(result).toEqual([{ cardId: "p", cardName: "Slowpoke", quantity: 4 }]);
+    });
+  });
 });
 
 describe("ensureEvolutionPrerequisites", () => {

@@ -34,24 +34,47 @@ export type RawGeneratedCard = { cardId: string; count: number };
  *   Energy is exempt from the per-name copy limit above, so nothing else
  *   stops a single Energy candidate from being assigned an arbitrarily
  *   large count — a real reported bug produced a 36-Energy deck against
- *   an 8-12 target. The prompt asks the model to stay in range, and the
- *   one bounded refinement pass nudges it if it doesn't, but neither is
- *   a guarantee; this makes the upper bound a hard, structural one, the
+ *   an 8-12 target.
+ * - Total Pokémon and Trainer counts are capped the same way via
+ *   `maxPokemonCount`/`maxTrainerCount` (each category's own archetype
+ *   range upper bound) — generalized from the Energy-only cap above
+ *   after a real report: the model's raw output totaled 138 cards
+ *   against a 60-card target (more than double), and because this
+ *   function processes entries in whatever order the model listed them
+ *   and simply stops once the running total hits 60, a raw overshoot
+ *   that severe made the FINAL composition arbitrary rather than
+ *   proportional — whichever categories happened to be listed first
+ *   dominated the truncated result, producing a real case landing at 16
+ *   Pokémon / 38 Trainer / 6 Energy against a control archetype's
+ *   10-15 / 25-32 / 10-14 targets. Capping every category's ceiling
+ *   during construction, not just Energy's, makes an upper-bound
+ *   composition violation structurally impossible regardless of how
+ *   badly the model overshoots the total or in what order it lists
+ *   entries. The prompt asks the model to stay in range, and the one
+ *   bounded refinement pass nudges it if it doesn't, but neither is a
+ *   guarantee; this makes the upper bounds hard, structural ones, the
  *   same way copy limits and the 60-card cap already are. Deliberately
  *   NOT enforcing a floor the same way itself — a deck genuinely short
- *   on Energy after this function stays short here; see
+ *   on a category after this function stays short here; see
  *   `topUpExistingCardsToSixty` below for the separate, later step that
- *   handles reaching exactly 60.
+ *   handles reaching exactly 60 (which also respects these same range
+ *   ceilings, so it can't undo this cap while filling the last few
+ *   slots).
  */
 export function buildVerifiedGeneratedDeck(
   rawCards: RawGeneratedCard[],
   candidatesById: Record<string, Card>,
-  options?: { maxEnergyCount?: number },
+  options?: { maxEnergyCount?: number; maxPokemonCount?: number; maxTrainerCount?: number },
 ): DeckCardEntry[] {
   const nameGroupTotals = new Map<string, number>();
   const result: DeckCardEntry[] = [];
   let totalCount = 0;
-  let energyCount = 0;
+  const categoryCounts = { Pokémon: 0, Trainer: 0, Energy: 0 };
+  const categoryMax: Partial<Record<Card["supertype"], number>> = {
+    Pokémon: options?.maxPokemonCount,
+    Trainer: options?.maxTrainerCount,
+    Energy: options?.maxEnergyCount,
+  };
 
   for (const item of rawCards) {
     if (totalCount >= DECK_SIZE) break;
@@ -75,12 +98,13 @@ export function buildVerifiedGeneratedDeck(
       nameGroupTotals.set(key, alreadyUsed + count);
     }
 
-    // Cap total Energy at the archetype's upper bound, when supplied —
-    // Basic Energy has no per-name limit above, so this is the only
-    // thing standing between the model and an arbitrarily lopsided deck.
-    if (card.supertype === "Energy" && options?.maxEnergyCount !== undefined) {
-      const energyAllowed = Math.max(0, options.maxEnergyCount - energyCount);
-      count = Math.min(count, energyAllowed);
+    // Cap this card's supertype category at its own archetype-range
+    // ceiling, when supplied — see the doc comment above for why this
+    // now covers all three categories, not just Energy.
+    const thisCategoryMax = categoryMax[card.supertype];
+    if (thisCategoryMax !== undefined) {
+      const categoryAllowed = Math.max(0, thisCategoryMax - categoryCounts[card.supertype]);
+      count = Math.min(count, categoryAllowed);
     }
 
     if (count <= 0) continue;
@@ -95,7 +119,7 @@ export function buildVerifiedGeneratedDeck(
     }
 
     totalCount += count;
-    if (card.supertype === "Energy") energyCount += count;
+    categoryCounts[card.supertype] += count;
   }
 
   return result;

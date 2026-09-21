@@ -13,7 +13,7 @@ export const createDeckSchema = z.object({
   format: deckFormatSchema,
 });
 
-export const strategyArchetypeSchema = z.enum(["aggro", "control", "mill", "other"]);
+export const strategyArchetypeSchema = z.enum(["aggro", "control", "mill", "midrange", "toolbox", "other"]);
 
 export const updateDeckSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),

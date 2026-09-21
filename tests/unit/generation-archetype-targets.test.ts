@@ -52,9 +52,11 @@ describe("buildPlanDataBlock — archetypeTargets grounding", () => {
 
   it("gives each archetype a distinct strategyDescription", () => {
     const descriptions = new Set(
-      (["aggro", "control", "mill", "other"] as const).map((a) => getArchetypeProfile(a).strategyDescription),
+      (["aggro", "control", "mill", "midrange", "toolbox", "other"] as const).map(
+        (a) => getArchetypeProfile(a).strategyDescription,
+      ),
     );
-    expect(descriptions.size).toBe(4);
+    expect(descriptions.size).toBe(6);
   });
 });
 

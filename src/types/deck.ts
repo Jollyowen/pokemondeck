@@ -8,7 +8,7 @@ export type DeckCardEntry = {
   quantity: number;
 };
 
-export type StrategyArchetype = "aggro" | "control" | "mill" | "other";
+export type StrategyArchetype = "aggro" | "control" | "mill" | "midrange" | "toolbox" | "other";
 
 export type Deck = {
   id: string;

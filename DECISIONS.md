@@ -2677,3 +2677,58 @@ tests). Findings and fixes:
 - Verified: `tsc --noEmit` clean, `eslint` clean, 230 unit tests
   unchanged and passing (a numeric constant + logging change to live API
   calls, not new branching logic).
+
+## Addition: Midrange and Toolbox battle-style archetypes
+
+- User confirmed adding both proposed archetypes to fill real gaps in
+  the original three (Aggro/Control/Mill) — Midrange (flexible, leans
+  aggressive or defensive by matchup) and Toolbox (many diverse
+  single-prize attackers, found via heavy search rather than one main
+  line) are both established, numerically distinct competitive
+  archetypes, not minor variations of an existing one.
+- `StrategyArchetype` widened to `"aggro" | "control" | "mill" |
+  "midrange" | "toolbox" | "other"` (`types/deck.ts`), with matching
+  updates to `strategyArchetypeSchema` (`schemas/deck.ts`).
+- Full `ArchetypeProfile` entries added to `archetype-profiles.ts`,
+  following the same shape as the existing four:
+  - **Midrange**: Pokémon 13-17, Trainer 23-28, Energy 11-15, draw≥7,
+    search≥7, basic≥9, retreat ceiling 2.
+  - **Toolbox**: Pokémon 10-14, Trainer 28-34, Energy 8-12, draw≥6,
+    **search≥10** (the defining numeric trait — well above every other
+    archetype, since search support is the backbone of the whole
+    strategy, not just a consistency nicety), basic≥7 (lower — often
+    single-stage attackers), retreat ceiling 2.
+  - Both include a full `strategyDescription`, surfaced through the same
+    `archetypeTargets` grounding mechanism already used for the original
+    four — no separate wiring needed, since both `plan-prompt.ts` and
+    `generation-prompt.ts` already pull the profile generically via
+    `getArchetypeProfile`, and `deck-quality.ts` has no archetype-specific
+    branching to update either.
+- **Found and fixed a real display bug while auditing every place the
+  archetype set was enumerated**: the public shared-deck page
+  (`shared/[token]/page.tsx`) had a hardcoded aggro/control/mill ternary
+  chain that silently fell through to "Other" for any other value —
+  meaning a deck with `strategyArchetype: "midrange"` would have
+  displayed as "Other" on its public share link even though the correct
+  archetype was stored correctly in the database. Fixed alongside the
+  addition, not left as a latent bug for whenever these two shipped.
+- Updated both UI dropdowns that had the archetype list hardcoded (the
+  AI deck generator form and the deck editor's own strategy selector) —
+  found via a full-codebase grep for every archetype enumeration site
+  rather than assuming only one place needed updating, given the shared
+  page bug above was found exactly because of not assuming that.
+- Also updated `prompt.ts`'s (AI review) own text description of valid
+  `strategyArchetype` values, for accuracy — a stale enum list in
+  prompt text wouldn't break anything functionally, but would silently
+  under-describe what's actually possible.
+- New tests in `deck-quality.test.ts` (mirroring the existing mill
+  differentiation test): a deck with 8 search-support cards passes under
+  the default profile but fails `LOW_SEARCH_SUPPORT` under toolbox's
+  10-minimum; a deck with 22 Trainer cards passes under the default
+  profile's wide 20-30 range but fails `TRAINER_COUNT_OUT_OF_RANGE`
+  under midrange's tighter 23-28. `generation-archetype-targets.test.ts`
+  updated to check all six archetypes get distinct descriptions (was
+  four).
+- Verified: `tsc --noEmit` clean, `eslint` clean, 232 unit tests pass
+  (230 previous + 2 new... plus incidental coverage from the updated
+  distinct-descriptions test).

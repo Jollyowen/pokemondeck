@@ -53,6 +53,28 @@ const PROFILES: Record<StrategyArchetype, ArchetypeProfile> = {
     strategyDescription:
       "Mill: reduce the opponent's deck to zero cards and win through deck-out where the rules allow. Include cards that reliably discard or otherwise remove cards from the opponent's deck. Maximise consistency in accessing the primary Pokémon and the deck's milling effects. Include disruption that prevents the opponent from rebuilding their resources or drawing through their deck too quickly. Include defensive and recovery options that let the deck survive long enough to execute the mill strategy. Don't treat conventional damage as the primary win condition unless it directly supports the mill strategy.",
   },
+  midrange: {
+    pokemonRange: [13, 17],
+    trainerRange: [23, 28],
+    energyRange: [11, 15],
+    drawSupportMin: 7,
+    searchSupportMin: 7,
+    basicPokemonMin: 9,
+    retreatCostCeiling: 2,
+    strategyDescription:
+      "Midrange: stay flexible enough to lean aggressive or defensive depending on the matchup, without fully committing to either. Build a deck that can apply real pressure when ahead but also has enough resilience and card advantage to grind out a longer game when behind. Favour Trainers and Pokémon that are useful in multiple game plans (draw, search, moderate disruption, solid all-round attackers) over narrow specialists that only work in one specific line of play.",
+  },
+  toolbox: {
+    pokemonRange: [10, 14],
+    trainerRange: [28, 34],
+    energyRange: [8, 12],
+    drawSupportMin: 6,
+    searchSupportMin: 10,
+    basicPokemonMin: 7,
+    retreatCostCeiling: 2,
+    strategyDescription:
+      "Toolbox: build around many diverse, often single-prize attackers rather than one main line, each answering a different matchup, and rely on heavy search to reliably find whichever specific answer the current game calls for. Search support is the backbone of the whole strategy, not just a consistency nicety — prioritise it even more heavily than draw support. Favour Pokémon that don't give up two Prize cards on a knockout where a real alternative exists, since the strategy depends on trading efficiently across many different attackers rather than protecting one big investment.",
+  },
   other: {
     pokemonRange: [15, 20],
     trainerRange: [20, 30],

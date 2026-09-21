@@ -59,7 +59,11 @@ export default async function SharedDeckPage({
                     ? "Control / Stall"
                     : deck.strategyArchetype === "mill"
                       ? "Mill"
-                      : "Other"}
+                      : deck.strategyArchetype === "midrange"
+                        ? "Midrange"
+                        : deck.strategyArchetype === "toolbox"
+                          ? "Toolbox"
+                          : "Other"}
               </span>
             )}
             {deck.strategyArchetype && deck.strategyNotes && " — "}

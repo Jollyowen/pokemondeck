@@ -248,6 +248,43 @@ describe("computeDeckQuality — hard checks", () => {
     expect(millResult.issues.some((i) => i.code === "TRAINER_COUNT_OUT_OF_RANGE")).toBe(false);
     expect(otherResult.issues.some((i) => i.code === "TRAINER_COUNT_OUT_OF_RANGE")).toBe(true);
   });
+
+  it("uses the toolbox profile's much higher search-support minimum instead of the default profile", () => {
+    const { cardsById } = makeGoodDeck();
+    // 8 search-support copies: above "other"'s min of 6, but below
+    // toolbox's min of 10 — the whole point of toolbox is that search is
+    // the backbone of the strategy, not just an ordinary consistency card.
+    const toolboxDeck: DeckCardEntry[] = [
+      { cardId: "attacker", cardName: "Blastoise", quantity: 12 },
+      { cardId: "draw", cardName: "Professor's Research", quantity: 6 },
+      { cardId: "search", cardName: "Ultra Ball", quantity: 8 },
+      { cardId: "filler", cardName: "Filler Item", quantity: 24 },
+      { cardId: "energy", cardName: "Water Energy", quantity: 10 },
+    ];
+    const statistics = computeDeckStatistics(toolboxDeck, cardsById, "all");
+    const toolboxResult = computeDeckQuality(toolboxDeck, cardsById, statistics, "toolbox", "all");
+    const otherResult = computeDeckQuality(toolboxDeck, cardsById, statistics, "other", "all");
+    expect(toolboxResult.issues.some((i) => i.code === "LOW_SEARCH_SUPPORT")).toBe(true);
+    expect(otherResult.issues.some((i) => i.code === "LOW_SEARCH_SUPPORT")).toBe(false);
+  });
+
+  it("uses the midrange profile's tighter Trainer range instead of the default profile", () => {
+    const { cardsById } = makeGoodDeck();
+    // 22 Trainer total: within "other"'s wide 20-30 range, but outside
+    // midrange's tighter 23-28 range.
+    const midrangeDeck: DeckCardEntry[] = [
+      { cardId: "attacker", cardName: "Blastoise", quantity: 16 },
+      { cardId: "draw", cardName: "Professor's Research", quantity: 8 },
+      { cardId: "search", cardName: "Ultra Ball", quantity: 8 },
+      { cardId: "filler", cardName: "Filler Item", quantity: 6 },
+      { cardId: "energy", cardName: "Water Energy", quantity: 22 },
+    ];
+    const statistics = computeDeckStatistics(midrangeDeck, cardsById, "all");
+    const midrangeResult = computeDeckQuality(midrangeDeck, cardsById, statistics, "midrange", "all");
+    const otherResult = computeDeckQuality(midrangeDeck, cardsById, statistics, "other", "all");
+    expect(midrangeResult.issues.some((i) => i.code === "TRAINER_COUNT_OUT_OF_RANGE")).toBe(true);
+    expect(otherResult.issues.some((i) => i.code === "TRAINER_COUNT_OUT_OF_RANGE")).toBe(false);
+  });
 });
 
 describe("computeDeckQuality — soft checks never affect passesHardChecks", () => {

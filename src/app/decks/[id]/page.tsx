@@ -404,6 +404,8 @@ export default function DeckEditorPage({ params }: { params: Promise<{ id: strin
               <option value="aggro">Aggro / Beatdown</option>
               <option value="control">Control / Stall</option>
               <option value="mill">Mill</option>
+              <option value="midrange">Midrange</option>
+              <option value="toolbox">Toolbox</option>
               <option value="other">Other</option>
             </select>
             <select

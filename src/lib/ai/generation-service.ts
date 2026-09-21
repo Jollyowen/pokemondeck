@@ -301,7 +301,23 @@ export async function generateDeck(
   // there's no longer a "may include illegal cards" caveat to surface
   // here — a generated deck is either fully format-legal, or generation
   // fails fast with PokemonNotLegalInFormatError before any AI call happens.
-  const explanationParts = [plan.justification, raw.explanation];
 
-  return { ...result, explanation: explanationParts.join(" ") };
+  // plan.justification is deliberately grounded in real candidate counts
+  // (see PLAN_TASK_INSTRUCTIONS) — good for the model's own planning
+  // quality, but that's exactly the kind of internal detail a real user
+  // shouldn't see in their deck's summary ("the pool had X candidates,
+  // so we leaned toward Y"). A real user report confirmed this had been
+  // leaking straight into the shown explanation, alongside raw.explanation
+  // narrating its own construction process (candidate pool sizes,
+  // archetype range numbers, how a previous overshoot was trimmed) rather
+  // than describing the finished deck. Only raw.explanation is shown now
+  // — its own instructions were tightened to stop the same leakage at the
+  // source (see GENERATION_TASK_INSTRUCTIONS) — and the plan's reasoning
+  // is kept here purely for our own debugging visibility, not the response.
+  console.log("AI deck generation: plan justification (internal only, not shown to user)", {
+    pokemonName: input.pokemonName,
+    justification: plan.justification,
+  });
+
+  return { ...result, explanation: raw.explanation };
 }

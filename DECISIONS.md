@@ -2825,3 +2825,50 @@ tests). Findings and fixes:
   options are omitted (existing behavior preserved).
 - Verified: `tsc --noEmit` clean, `eslint` clean, 241 unit tests pass
   (237 previous + 4 new).
+
+## Fix: user-facing deck explanation was leaking internal candidate-pool mechanics
+
+- User shared a real generated deck's summary — long, and full of
+  internal construction detail no deck owner needs: "Slowbro's
+  Psychic-heavy pool (33 candidates)", "With only 9 draw and 10 search
+  candidates available", "clearing the drawSupportMin (8) and
+  searchSupportMin (6) hard minimums", "one above the stated max of
+  14", "To fix the previous 16-Pokémon overshoot (the 10-15 range)".
+  Correctly identified this as the model narrating its own
+  constraint-solving process rather than describing the actual deck.
+- **Traced to two distinct sources feeding the same user-visible
+  field**, both fixed:
+  1. `generation-service.ts` concatenated `plan.justification` together
+     with the compile step's `raw.explanation` into the single
+     user-facing `explanation` string. But `PLAN_TASK_INSTRUCTIONS`
+     deliberately asks the plan's justification to be "grounded in the
+     actual candidate counts you were given" — genuinely useful for the
+     model's own planning quality, but never meant to be read by the
+     deck's owner. Stopped surfacing `plan.justification` to the user
+     entirely; it's now only logged internally
+     (`AI deck generation: plan justification (internal only, not shown
+     to user)`) for our own debugging visibility, which is the only
+     thing it was ever really needed for downstream of planning itself.
+  2. `raw.explanation` itself was ALSO contaminated — the compile step's
+     own instructions never actually told the model who this text was
+     for, so it defaulted to narrating its own process ("we trimmed...",
+     "adjusting Energy to 14 (within the 10-14 range) by trimming one
+     Psychic Energy"). Rewrote the "explanation" instruction in
+     `GENERATION_TASK_INSTRUCTIONS` to explicitly frame it as user-facing
+     text: never mention candidate counts, archetype numeric ranges,
+     hard minimums, or how an earlier draft was trimmed/rebalanced;
+     describe only the finished deck — win condition, the primary
+     Pokémon's role, why the supporting cards work together — "as if
+     introducing a complete, already-built decklist to someone who never
+     saw how it came together." Added a rough length guideline (3-5
+     sentences) directly addressing the "long-winded" part of the
+     report, not just the content leakage. A genuine below-60 shortfall
+     is still allowed to be mentioned, but in plain terms ("runs a
+     little light on Trainers") rather than citing pool sizes or
+     thresholds.
+- `GENERATION_PROMPT_VERSION` bumped to `2.7.0`.
+- No new tests: this is prompt-text content and a field-wiring change
+  (which string(s) populate the user-facing response), not new
+  validation or branching logic for something already covered.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 241 unit tests
+  unchanged and passing.

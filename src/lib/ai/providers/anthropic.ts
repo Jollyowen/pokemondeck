@@ -107,7 +107,13 @@ export const anthropicReviewProvider: DeckReviewProvider = {
 
     const response = await client.messages.create({
       model: env.AI_MODEL,
-      max_tokens: 8192,
+      // Doubled defensively (8192->16384) alongside the generateDeck fix
+      // below — Claude Sonnet 5 has adaptive thinking on by default,
+      // which counts toward this same budget even when the "thinking"
+      // param is never set, so the actual JSON-writing budget is smaller
+      // than max_tokens alone suggests. Not yet a confirmed failure here
+      // the way generateDeck was, but the same risk applies uniformly.
+      max_tokens: 16384,
       system: `${REVIEW_TASK_INSTRUCTIONS}\n\nCall the submit_deck_review tool exactly once with your completed analysis. Every array-typed field in the tool's input must be an actual array, never a string.`,
       tools: [REVIEW_TOOL],
       tool_choice: { type: "tool", name: "submit_deck_review" },
@@ -137,7 +143,17 @@ export const anthropicReviewProvider: DeckReviewProvider = {
       reportError(
         "Anthropic tool_use input failed schema validation",
         new Error("schema validation failed"),
-        { rawJsonPreview: rawJson.slice(0, 1000) },
+        {
+          rawJsonPreview: rawJson.slice(0, 1000),
+          // stop_reason "max_tokens" + outputTokens close to the
+          // configured max_tokens is conclusive evidence of truncation
+          // (see the generateDeck adapter's doc comment on adaptive
+          // thinking consuming the same budget) rather than a genuine
+          // malformed-output case — worth knowing which one it was
+          // without guessing.
+          stopReason: response.stop_reason ?? undefined,
+          outputTokens: response.usage?.output_tokens,
+        },
       );
       throw new AiReviewOutputError();
     }
@@ -214,7 +230,13 @@ export const anthropicDeckGenerationProvider: DeckGenerationProvider = {
 
     const response = await client.messages.create({
       model: env.AI_MODEL,
-      max_tokens: 2048,
+      // Bumped defensively (2048->4096) alongside the same fix for
+      // generateDeck/reviewDeck — see generateDeck's doc comment for why:
+      // Claude Sonnet 5's adaptive thinking counts toward this same
+      // budget by default. The plan output itself is small (no card
+      // list), so this is lower-risk than the other two calls, but the
+      // underlying cause applies uniformly to every call on this model.
+      max_tokens: 4096,
       system: `${PLAN_TASK_INSTRUCTIONS}\n\nCall the propose_deck_plan tool exactly once. Every array-typed field must be an actual JSON array, never a string.`,
       tools: [PLAN_DECK_TOOL],
       tool_choice: { type: "tool", name: "propose_deck_plan" },
@@ -240,6 +262,8 @@ export const anthropicDeckGenerationProvider: DeckGenerationProvider = {
     if (!parsed) {
       reportError("Anthropic plan tool_use input failed schema validation", new Error("schema validation failed"), {
         rawJsonPreview: rawJson.slice(0, 1000),
+        stopReason: response.stop_reason ?? undefined,
+        outputTokens: response.usage?.output_tokens,
       });
       throw new AiReviewOutputError();
     }
@@ -253,18 +277,25 @@ export const anthropicDeckGenerationProvider: DeckGenerationProvider = {
 
     const response = await client.messages.create({
       model: env.AI_MODEL,
-      // 8192 -> 16384: real production failure (truncated tool-call JSON,
-      // same "hit max_tokens mid-response, invalid partial JSON" shape as
-      // the AI review's original 4096->8192 fix — see DECISIONS.md). This
-      // time it surfaced only after the candidate pool got substantially
-      // richer (more distinct real candidates -> a longer proposed
-      // decklist) and the explanation requirement got more detailed
-      // (asks for the primary Pokémon's role AND supporting cards'
-      // purposes) — both genuine improvements that pushed a full response
-      // past the old ceiling. 16384 leaves real headroom for a ~20-30
-      // distinct-card decklist plus a thorough explanation, not just
-      // enough for the specific case that failed.
-      max_tokens: 16384,
+      // 8192 -> 16384 -> 32768: real production failure recurred a
+      // SECOND time even after the first doubling, this time on the
+      // refinement call specifically. Root cause, confirmed against
+      // Anthropic's own docs rather than just doubling again blindly:
+      // Claude Sonnet 5 has adaptive thinking ON BY DEFAULT (even when
+      // the "thinking" param is never set), and thinking tokens count
+      // toward this SAME max_tokens budget — so the actual budget
+      // available for writing the JSON tool-call output is smaller than
+      // max_tokens alone suggests, by however many tokens the model
+      // spent reasoning first. The model supports up to 128k output
+      // tokens on the synchronous Messages API, so there's enormous
+      // headroom to work with; max_tokens only caps the ceiling; actual
+      // usage/billing is based on tokens really generated, not this
+      // number, so a generous ceiling here is close to free insurance
+      // rather than a real cost. 32768 leaves real room for adaptive
+      // thinking AND a ~20-30 distinct-card decklist plus a thorough
+      // explanation, even if thinking alone consumes several thousand
+      // tokens before the model starts writing the tool call.
+      max_tokens: 32768,
       system: `${GENERATION_TASK_INSTRUCTIONS}\n\nCall the propose_deck tool exactly once with your completed decklist. "cards" must be an actual JSON array, never a string.`,
       tools: [GENERATE_DECK_TOOL],
       tool_choice: { type: "tool", name: "propose_deck" },
@@ -291,7 +322,15 @@ export const anthropicDeckGenerationProvider: DeckGenerationProvider = {
       reportError(
         "Anthropic generation tool_use input failed schema validation",
         new Error("schema validation failed"),
-        { rawJsonPreview: rawJson.slice(0, 1000) },
+        {
+          rawJsonPreview: rawJson.slice(0, 1000),
+          // Conclusive evidence either way: stop_reason "max_tokens" with
+          // outputTokens at or near the configured max_tokens confirms
+          // truncation; anything else points at a genuine malformed-
+          // output case instead, which would need a different fix.
+          stopReason: response.stop_reason ?? undefined,
+          outputTokens: response.usage?.output_tokens,
+        },
       );
       throw new AiReviewOutputError();
     }

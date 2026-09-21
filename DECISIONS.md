@@ -2631,3 +2631,49 @@ tests). Findings and fixes:
   real candidate without crashing.
 - Verified: `tsc --noEmit` clean, `eslint` clean, 230 unit tests pass
   (224 previous + 6 new).
+
+## Fix: real root cause of recurring truncation — adaptive thinking consuming the same max_tokens budget
+
+- Real production failure #2 of the same shape: refinement call
+  truncated mid-word again, despite the earlier 8192->16384 fix. Rather
+  than double the number again and hope, checked Anthropic's own docs
+  for Claude Sonnet 5 first.
+- **Root cause**: Claude Sonnet 5 has adaptive thinking on by default —
+  including for requests that never set the `thinking` parameter at
+  all — and thinking tokens count toward the same `max_tokens` budget as
+  the actual output. None of the three Anthropic calls in this app
+  (`reviewDeck`, `planDeck`, `generateDeck`) ever configured `thinking`
+  explicitly, so the real budget available for writing the JSON tool-call
+  output was smaller than `max_tokens` alone suggested, by however many
+  tokens the model spent reasoning first — worse for `generateDeck`
+  specifically since its output (a 20-30-entry decklist plus a detailed
+  explanation) is the largest of the three.
+- The model supports up to 128k output tokens on the synchronous
+  Messages API, so there was enormous unused headroom the whole time.
+  `max_tokens` only sets a ceiling; actual usage/billing is based on
+  tokens genuinely generated, not this number, so raising it generously
+  is close to free insurance rather than a real cost.
+- Fixed by raising every Anthropic call's `max_tokens` substantially
+  rather than incrementally: `generateDeck` 16384→32768 (the one with
+  two confirmed real failures), `reviewDeck` 8192→16384 and `planDeck`
+  2048→4096 (defensive — same underlying cause applies uniformly to
+  every call on this model, even though only `generateDeck` had actually
+  failed twice).
+- Added `stopReason` and `outputTokens` (from `response.usage.
+  output_tokens`) to every schema-validation-failure log across all
+  three calls, not just the "missing tool_use block" case that already
+  had `stopReason`. `stop_reason === "max_tokens"` with `outputTokens`
+  at or near the configured ceiling is now conclusive, checkable
+  evidence of truncation on any future recurrence, rather than inferring
+  it from a truncated JSON preview the way this fix had to.
+- Deliberately did NOT explicitly disable thinking
+  (`thinking: {type: "disabled"}`) — the task genuinely involves
+  non-trivial constraint satisfaction (copy limits, archetype ranges,
+  real candidate IDs, a coherent strategy), and there's no evidence
+  disabling reasoning would improve rather than hurt output quality;
+  the actual bug was an unaccounted-for budget interaction, not thinking
+  being unwanted, so the fix addresses the budget rather than removing
+  the reasoning.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 230 unit tests
+  unchanged and passing (a numeric constant + logging change to live API
+  calls, not new branching logic).

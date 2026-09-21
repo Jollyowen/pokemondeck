@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { normalizeQuotes, toIlikeSearchTerm, takeLegal } from "@/lib/ai/candidate-cards";
+import { normalizeQuotes, toIlikeSearchTerm, takeLegal, takeLegalDistinctByName } from "@/lib/ai/candidate-cards";
 import type { Card } from "@/types/card";
 
-function makeCard(id: string, legalities: Partial<Card["legalities"]>): Card {
+function makeCard(id: string, legalities: Partial<Card["legalities"]>, name = "Test Card"): Card {
   return {
     id,
     provider: "tcgdex",
@@ -11,7 +11,7 @@ function makeCard(id: string, legalities: Partial<Card["legalities"]>): Card {
     setName: "Set One",
     imageSmall: "",
     imageLarge: "",
-    name: "Test Card",
+    name,
     supertype: "Trainer",
     subtypes: [],
     types: [],
@@ -96,5 +96,58 @@ describe("takeLegal", () => {
   it("treats every card as legal when format is \"all\"", () => {
     const cards = [makeCard("a", { standard: "not_legal" })];
     expect(takeLegal(cards, "all", 1)).toEqual(cards);
+  });
+});
+
+describe("takeLegalDistinctByName", () => {
+  it("counts only one printing of the same card name toward the cap, even with multiple legal printings", () => {
+    // Real reported bug: a generated deck kept reusing the same handful
+    // of Supporters every time. Traced to a real candidate-gathering log
+    // showing "Gwynn" three times in one role-classified bucket — three
+    // different printings of the identical card were each independently
+    // counted toward a small per-bucket cap, wasting most of the bucket
+    // on redundant names instead of genuinely different strategic
+    // options.
+    const cards = [
+      makeCard("gwynn-set1", { standard: "legal" }, "Gwynn"),
+      makeCard("gwynn-set2", { standard: "legal" }, "Gwynn"),
+      makeCard("gwynn-set3", { standard: "legal" }, "Gwynn"),
+      makeCard("judge-set1", { standard: "legal" }, "Judge"),
+    ];
+    const result = takeLegalDistinctByName(cards, "standard", 3);
+    expect(result.map((c) => c.name)).toEqual(["Gwynn", "Judge"]);
+  });
+
+  it("keeps the first (most recent, since results are newest-first) printing of a repeated name", () => {
+    const cards = [
+      makeCard("newest", { standard: "legal" }, "Gwynn"),
+      makeCard("older", { standard: "legal" }, "Gwynn"),
+    ];
+    const result = takeLegalDistinctByName(cards, "standard", 5);
+    expect(result).toEqual([cards[0]]);
+  });
+
+  it("is case/quote-insensitive the same way normalizeCardName is, not a raw string match", () => {
+    const cards = [
+      makeCard("a", { standard: "legal" }, "boss's orders"),
+      makeCard("b", { standard: "legal" }, "Boss's Orders"),
+    ];
+    const result = takeLegalDistinctByName(cards, "standard", 5);
+    expect(result).toHaveLength(1);
+  });
+
+  it("still filters out illegal cards before considering names at all", () => {
+    const cards = [makeCard("a", { standard: "not_legal" }, "Gwynn"), makeCard("b", { standard: "legal" }, "Judge")];
+    const result = takeLegalDistinctByName(cards, "standard", 5);
+    expect(result.map((c) => c.name)).toEqual(["Judge"]);
+  });
+
+  it("respects the cap on distinct names, not on raw card count", () => {
+    const cards = [
+      makeCard("a", { standard: "legal" }, "A"),
+      makeCard("b", { standard: "legal" }, "B"),
+      makeCard("c", { standard: "legal" }, "C"),
+    ];
+    expect(takeLegalDistinctByName(cards, "standard", 2)).toHaveLength(2);
   });
 });

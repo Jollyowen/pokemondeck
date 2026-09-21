@@ -4,6 +4,7 @@ import type { DeckCardEntry, DeckStatistics } from "@/types/deck";
 import { searchLocalCards } from "@/lib/cards/local-card-repository";
 import { getEvolutionLineNames } from "@/lib/deck/evolution-line";
 import { isBasicEnergy } from "@/lib/deck/validate";
+import { normalizeCardName } from "@/lib/deck/normalize-name";
 import { isCardLegalInFormat } from "@/lib/format-legality";
 import { isDrawSupportCard, isSearchSupportCard } from "@/lib/deck/text-heuristics";
 
@@ -113,6 +114,36 @@ export function takeLegal(cards: Card[], format: DeckFormat, n: number): Card[] 
 }
 
 /**
+ * Same as takeLegal, but also dedupes by normalized card NAME before
+ * slicing — multiple printings of the exact same card (a recent reprint
+ * in one set, another in a different set) would otherwise each count
+ * separately toward `n`, wasting slots on redundant names rather than
+ * genuinely different strategic options. Real bug found this way: a
+ * generated-deck report of the same handful of Supporters recurring
+ * every time traced back to `n`-sized buckets being partly filled with
+ * multiple printings of the identical card (the same "Gwynn" three
+ * times in one real candidate-gathering log). Use this instead of
+ * takeLegal wherever the point of the slice is genuine variety for the
+ * model to choose between (same-type Pokémon, role-classified Trainers)
+ * rather than a single specific card being searched for by name (the
+ * staple-name searches elsewhere in this file, where there's only ever
+ * one name to begin with and this distinction is moot).
+ */
+export function takeLegalDistinctByName(cards: Card[], format: DeckFormat, n: number): Card[] {
+  const seen = new Set<string>();
+  const result: Card[] = [];
+  for (const card of cards) {
+    if (!isCardLegalInFormat(card, format)) continue;
+    const key = normalizeCardName(card.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(card);
+    if (result.length >= n) break;
+  }
+  return result;
+}
+
+/**
  * Finds real, currently-legal draw- and search-support Trainers by
  * classifying actual card text (the same `isDrawSupportCard`/
  * `isSearchSupportCard` heuristics used elsewhere in this app), rather
@@ -157,12 +188,37 @@ async function findRoleBasedTrainerCandidates(
     const draw: Card[] = [];
     const search: Card[] = [];
     const other: Card[] = [];
+    // Dedupe by name within each bucket, not just by card ID — real bug,
+    // found from an actual generated-deck report of the same handful of
+    // Supporters recurring every time. Multiple printings of the exact
+    // same card (e.g. three different set reprints of "Gwynn") each
+    // independently satisfy isDrawSupportCard and would otherwise
+    // consume separate slots in `draw` up to `perRole`, wasting most of
+    // the bucket on redundant NAMES rather than genuinely different
+    // strategic options — the model can only ever use 4 copies of one
+    // name regardless of how many printings are offered, so filling a
+    // slot with a second printing of an already-represented name adds
+    // no real choice. This is the identical shape of bug already fixed
+    // once for the target Pokémon's own printings crowding the pool.
+    const drawNames = new Set<string>();
+    const searchNames = new Set<string>();
+    const otherNames = new Set<string>();
     for (const card of legal) {
-      const isDraw = draw.length < perRole && isDrawSupportCard(card);
-      const isSearch = search.length < perRole && isSearchSupportCard(card);
-      if (isDraw) draw.push(card);
-      if (isSearch) search.push(card);
-      if (!isDraw && !isSearch && other.length < otherCount) other.push(card);
+      const key = normalizeCardName(card.name);
+      const isDraw = draw.length < perRole && !drawNames.has(key) && isDrawSupportCard(card);
+      const isSearch = search.length < perRole && !searchNames.has(key) && isSearchSupportCard(card);
+      if (isDraw) {
+        draw.push(card);
+        drawNames.add(key);
+      }
+      if (isSearch) {
+        search.push(card);
+        searchNames.add(key);
+      }
+      if (!isDraw && !isSearch && other.length < otherCount && !otherNames.has(key)) {
+        other.push(card);
+        otherNames.add(key);
+      }
       if (draw.length >= perRole && search.length >= perRole && other.length >= otherCount) break;
     }
     return { draw, search, other };
@@ -308,7 +364,7 @@ export async function gatherCandidateCards(
         pokemonType: type,
         pageSize: 100,
       });
-      takeLegal(
+      takeLegalDistinctByName(
         result.cards.filter((c) => c.attacks.length > 0),
         format,
         10,
@@ -466,7 +522,7 @@ export async function gatherDeckGenerationCandidates(
     if (candidates.size >= GENERATION_MAX_CANDIDATES) break;
     try {
       const result = await searchLocalCards({ supertype: "Pokémon", pokemonType: type, pageSize: 150 });
-      takeLegal(
+      takeLegalDistinctByName(
         result.cards.filter((c) => c.attacks.length > 0),
         format,
         30,

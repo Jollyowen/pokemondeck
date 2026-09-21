@@ -2732,3 +2732,49 @@ tests). Findings and fixes:
 - Verified: `tsc --noEmit` clean, `eslint` clean, 232 unit tests pass
   (230 previous + 2 new... plus incidental coverage from the updated
   distinct-descriptions test).
+
+## Fix: same Supporter cards recurring every generation — role/type buckets weren't deduped by name
+
+- User reported the same 4 Supporters (Boss's Orders, Emma, Gwynn,
+  Judge) showing up in effectively every generated deck. Traced directly
+  to evidence already sitting in an earlier log rather than guessing
+  fresh: a real `roleBasedDrawNames` array had shown `"Gwynn", "Gwynn",
+  "Gwynn"` — the same card name three times.
+- **Root cause**: neither `findRoleBasedTrainerCandidates`'s draw/search/
+  other bucket-filling, nor the "other Pokémon sharing a type" searches,
+  deduped by card NAME — only by card ID (via `addIfNew` downstream).
+  Multiple printings of the exact same card (a reprint in one set, a
+  different reprint in another) each independently satisfy
+  `isDrawSupportCard` and would get pushed into a bucket separately, up
+  to its small cap (`perRole`, or the same-type take-count). Since the
+  model can only ever use 4 copies of one name regardless of how many
+  printings are offered as separate candidates, a bucket partly filled
+  with redundant printings of an already-represented name wastes most of
+  its real diversity budget — exactly the mechanism that would make the
+  same few heavily-reprinted staples dominate every generation
+  regardless of target Pokémon, since Trainer candidates aren't even
+  type-scoped to begin with. Identical shape of bug to the earlier
+  "target Pokémon's own printings crowding the candidate pool" fix, just
+  recurring in the role-based/type-based buckets instead.
+- Fixed by adding `takeLegalDistinctByName` (alongside the existing
+  `takeLegal`) — same legality filter, but also dedupes by normalized
+  card name, keeping the first (most recent, since results sort
+  newest-first) printing of each distinct name. Applied to both
+  "other Pokémon sharing a type" searches (generation and review paths)
+  and inlined directly into `findRoleBasedTrainerCandidates`'s
+  draw/search/other bucket logic, since that function fills three
+  buckets in one pass rather than a single slice.
+- Deliberately did NOT change the 15 named-staple searches or the
+  utility-Pokémon searches — each of those already searches for one
+  specific name at a time, so name-level deduplication is moot there;
+  only the broad, multi-result searches where genuine variety is the
+  actual point needed this.
+- New tests in `candidate-cards-name-matching.test.ts`: three printings
+  of the same name count as one toward the cap (the exact reported
+  scenario); the most recent printing is kept when a name repeats;
+  case/quote-insensitive matching (reusing `normalizeCardName`, not a
+  raw string compare); illegal printings are still filtered out before
+  names are even considered; the cap applies to distinct names, not raw
+  card count.
+- Verified: `tsc --noEmit` clean, `eslint` clean, 237 unit tests pass
+  (232 previous + 5 new).
